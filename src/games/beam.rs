@@ -167,7 +167,7 @@ const MAGNETS_PER_SECTION: usize = 6;
 const TOTAL_MAGNETS: usize = NUM_SECTIONS * MAGNETS_PER_SECTION;
 const GOAL_TURNS: u32 = 10;
 const MAX_HISTORY: usize = 60;
-const NUM_RAMPS: usize = 9;
+const NUM_RAMPS: usize = 10;
 const MAX_RAMP_DELTA: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -247,9 +247,9 @@ pub struct BeamGame {
     message: Option<(String, u32, Color)>, // (text, ticks_remaining, color)
     // Bump mode: closed orbit bump using N consecutive trim magnets
     bump: Option<BumpConfig>,
-    // Power supply ramp: 9 settings per magnet, one per turn (keys 1-9)
-    ramp_powers: Vec<[f32; 9]>,  // Per-magnet power at each ramp point
-    selected_ramp: usize,         // Which ramp point is being edited (0-8)
+    // Power supply ramp: 10 settings per magnet, one per turn (keys 0-9)
+    ramp_powers: Vec<[f32; 10]>,  // Per-magnet power at each ramp point
+    selected_ramp: usize,          // Which ramp point is being edited (0-9)
 }
 
 impl BeamGame {
@@ -284,9 +284,9 @@ impl BeamGame {
             Restriction { section: restriction_sections[3], axis: 'y', positive_blocked: rng.gen_bool(0.5) },
         ];
 
-        // Initialize ramp powers: all 9 ramp points start with same initial power
-        let ramp_powers: Vec<[f32; 9]> = magnets.iter()
-            .map(|m| [m.power; 9])
+        // Initialize ramp powers: all 10 ramp points start with same initial power
+        let ramp_powers: Vec<[f32; 10]> = magnets.iter()
+            .map(|m| [m.power; 10])
             .collect();
 
         Self {
@@ -474,7 +474,7 @@ impl BeamGame {
         let powers: Vec<f32> = (0..MAGNETS_PER_SECTION)
             .map(|e| self.magnets[src_base + e].power)
             .collect();
-        let ramps: Vec<[f32; 9]> = (0..MAGNETS_PER_SECTION)
+        let ramps: Vec<[f32; 10]> = (0..MAGNETS_PER_SECTION)
             .map(|e| self.ramp_powers[src_base + e])
             .collect();
         for sec in 0..NUM_SECTIONS {
@@ -781,8 +781,8 @@ impl Game for BeamGame {
                             self.prev_section();
                         }
                     }
-                    // Zero the selected magnet's ramp value (or zero bump trims in bump mode)
-                    KeyCode::Char('0') => {
+                    // Zero the selected magnet's ramp value (Z key, or zero bump trims in bump mode)
+                    KeyCode::Char('z') | KeyCode::Char('Z') => {
                         if let Some(ref bump) = self.bump {
                             let sec_coeffs = bump.section_coefficients();
                             let ramp_idx = self.selected_ramp;
@@ -797,7 +797,7 @@ impl Game for BeamGame {
                                 self.magnets[vt_idx].power = vt_clamped;
                             }
                             self.message = Some((
-                                format!("Zeroed bump trims (ramp {})", self.selected_ramp + 1),
+                                format!("Zeroed bump trims (Ramp{})", self.selected_ramp),
                                 30, Color::Rgb(255, 200, 80),
                             ));
                         } else {
@@ -808,13 +808,13 @@ impl Game for BeamGame {
                             self.magnets[sel].power = clamped;
                         }
                     }
-                    // Ramp point selection: keys 1-9 select which ramp point to edit
-                    KeyCode::Char(c @ '1'..='9') => {
-                        let ramp_idx = (c as usize) - ('1' as usize);
+                    // Ramp point selection: keys 0-9 select which ramp point to edit
+                    KeyCode::Char(c @ '0'..='9') => {
+                        let ramp_idx = (c as usize) - ('0' as usize);
                         self.selected_ramp = ramp_idx;
                         self.sync_display_from_ramp();
                         self.message = Some((
-                            format!("Ramp {} (Turn {})", ramp_idx + 1, ramp_idx),
+                            format!("Ramp{}", ramp_idx),
                             30, Color::Rgb(120, 200, 255),
                         ));
                     }
@@ -906,7 +906,7 @@ impl Game for BeamGame {
                 Style::default().fg(self.difficulty.color()).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("Ramp:{}/9(T{}) ", self.selected_ramp + 1, self.selected_ramp),
+                format!("Ramp{} ", self.selected_ramp),
                 Style::default().fg(Color::Rgb(180, 140, 255)).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
@@ -1321,7 +1321,7 @@ impl Game for BeamGame {
                 Span::styled("Y only ", Style::default().fg(Color::Rgb(140, 140, 160))),
                 Span::styled("│ ←→ ", Style::default().fg(Color::Rgb(120, 220, 255)).add_modifier(Modifier::BOLD)),
                 Span::styled("shift ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ 0 ", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
+                Span::styled("│ Z ", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
                 Span::styled("zero ", Style::default().fg(Color::Rgb(140, 140, 160))),
                 Span::styled("│ B ", Style::default().fg(Color::Rgb(140, 140, 160)).add_modifier(Modifier::BOLD)),
                 Span::styled("exit bump", Style::default().fg(Color::Rgb(140, 140, 160))),
@@ -1434,7 +1434,7 @@ impl Game for BeamGame {
             // Bump mode help bar
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(" BUMP ", Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)),
-                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 1-9 Ramp │ 0 Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
+                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 0-9 Ramp │ Z Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
@@ -1442,7 +1442,7 @@ impl Game for BeamGame {
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(if self.beam_running { " SPACE: running " } else { " SPACE: start " },
                     Style::default().fg(if self.beam_running { Color::Green } else { Color::Yellow })),
-                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 1-9 Ramp │ B Bump │ C Copy │ +/- Step │ 0 Zero │ D Diff │ P │ Esc",
+                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 0-9 Ramp │ B Bump │ C Copy │ +/- Step │ Z Zero │ D Diff │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
