@@ -165,6 +165,8 @@ const LOSS_ZONE: f32 = 25.0; // beam edges past this start accumulating losses
 const MAX_LOSSES: f32 = 100.0; // game over when losses reach this
 const MAGNETS_PER_SECTION: usize = 6;
 const TOTAL_MAGNETS: usize = NUM_SECTIONS * MAGNETS_PER_SECTION;
+// Design dipole strength: each section needs 15° of bend (360/24), split across 2 dipoles
+const DESIGN_DIPOLE_POWER: f32 = 0.1309; // ~7.5° in radians per dipole
 const GOAL_TURNS: u32 = 5;
 const MAX_HISTORY: usize = 60;
 const NUM_RAMPS: usize = 10;
@@ -260,14 +262,15 @@ impl BeamGame {
     pub fn new() -> Self {
         let mut magnets = Vec::new();
         for sec in 0..NUM_SECTIONS {
-            // Default FODO lattice values - quads start slightly off from ideal
-            // Player needs to fine-tune for stability
-            let ideal_bend = 15.0_f32.to_radians(); // 360/24 = 15 degrees per section
-            let starting_focus = 0.04; // Close to stable, but needs tuning
-            magnets.push(Magnet { mag_type: MagnetType::FocusQuad, power: starting_focus, _section: sec });
-            magnets.push(Magnet { mag_type: MagnetType::Dipole1, power: ideal_bend / 2.0, _section: sec });
-            magnets.push(Magnet { mag_type: MagnetType::DefocusQuad, power: starting_focus * 0.8, _section: sec });
-            magnets.push(Magnet { mag_type: MagnetType::Dipole2, power: ideal_bend / 2.0, _section: sec });
+            // All magnets start at 0 - player must:
+            // 1) Set dipoles to ~0.131 (DESIGN_DIPOLE_POWER) to bend beam around the ring
+            // 2) Tune quads for focusing stability
+            // 3) Use trims for fine orbit corrections
+            // With all magnets at 0 the beam goes straight and immediately hits the wall!
+            magnets.push(Magnet { mag_type: MagnetType::FocusQuad, power: 0.0, _section: sec });
+            magnets.push(Magnet { mag_type: MagnetType::Dipole1, power: 0.0, _section: sec });
+            magnets.push(Magnet { mag_type: MagnetType::DefocusQuad, power: 0.0, _section: sec });
+            magnets.push(Magnet { mag_type: MagnetType::Dipole2, power: 0.0, _section: sec });
             magnets.push(Magnet { mag_type: MagnetType::VTrim, power: 0.0, _section: sec });
             magnets.push(Magnet { mag_type: MagnetType::HTrim, power: 0.0, _section: sec });
         }
@@ -347,8 +350,11 @@ impl BeamGame {
                 self.beam_y_size = (self.beam_y_size * (1.0 + k.abs() * 0.3)).min(APERTURE * 2.0);
             }
             MagnetType::Dipole1 | MagnetType::Dipole2 => {
-                // Dipole kick: changes angle (horizontal bend only)
-                self.beam_angle += magnet.power;
+                // Dipole must supply the design bend to keep beam on circular orbit.
+                // The beam "wants" to go straight; only the dipole bending force curves it.
+                // Error from design = how much the orbit deviates from the ideal circle.
+                let bend_error = magnet.power - DESIGN_DIPOLE_POWER;
+                self.beam_angle += bend_error;
                 // Drift effect: position changes with angle
                 self.beam_position += self.beam_angle * 2.0;
                 // Y gets a small drift from its own angle
