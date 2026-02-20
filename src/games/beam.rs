@@ -167,6 +167,8 @@ const MAGNETS_PER_SECTION: usize = 6;
 const TOTAL_MAGNETS: usize = NUM_SECTIONS * MAGNETS_PER_SECTION;
 const GOAL_TURNS: u32 = 10;
 const MAX_HISTORY: usize = 60;
+const RAMP_TURNS: [u32; 4] = [0, 2, 5, 8];
+const MAX_RAMP_DELTA: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
 enum MagnetType {
@@ -245,6 +247,9 @@ pub struct BeamGame {
     message: Option<(String, u32, Color)>, // (text, ticks_remaining, color)
     // Bump mode: closed orbit bump using N consecutive trim magnets
     bump: Option<BumpConfig>,
+    // Power supply ramp: 4 settings per magnet at turns 0, 2, 5, 8
+    ramp_powers: Vec<[f32; 4]>,  // Per-magnet power at each ramp point
+    selected_ramp: usize,         // Which ramp point is being edited (0-3)
 }
 
 impl BeamGame {
@@ -279,6 +284,11 @@ impl BeamGame {
             Restriction { section: restriction_sections[3], axis: 'y', positive_blocked: rng.gen_bool(0.5) },
         ];
 
+        // Initialize ramp powers: all 4 ramp points start with same initial power
+        let ramp_powers: Vec<[f32; 4]> = magnets.iter()
+            .map(|m| [m.power; 4])
+            .collect();
+
         Self {
             magnets,
             selected: 0,
@@ -309,6 +319,8 @@ impl BeamGame {
             difficulty: Difficulty::Easy,
             message: None,
             bump: None,
+            ramp_powers,
+            selected_ramp: 0,
         }
     }
 
@@ -455,22 +467,26 @@ impl BeamGame {
         self.selected % MAGNETS_PER_SECTION
     }
 
-    /// Copy current section's magnet settings to all other sections
+    /// Copy current section's magnet settings (including all ramp points) to all other sections
     fn copy_to_all_sections(&mut self) {
         let src_sec = self.selected_section();
         let src_base = src_sec * MAGNETS_PER_SECTION;
         let powers: Vec<f32> = (0..MAGNETS_PER_SECTION)
             .map(|e| self.magnets[src_base + e].power)
             .collect();
+        let ramps: Vec<[f32; 4]> = (0..MAGNETS_PER_SECTION)
+            .map(|e| self.ramp_powers[src_base + e])
+            .collect();
         for sec in 0..NUM_SECTIONS {
             if sec == src_sec { continue; }
             let base = sec * MAGNETS_PER_SECTION;
             for e in 0..MAGNETS_PER_SECTION {
                 self.magnets[base + e].power = powers[e];
+                self.ramp_powers[base + e] = ramps[e];
             }
         }
         self.message = Some((
-            format!("Copied section {} to all!", src_sec + 1),
+            format!("Copied section {} to all (all ramps)!", src_sec + 1),
             45,
             Color::Rgb(80, 255, 180),
         ));
@@ -505,6 +521,65 @@ impl BeamGame {
         let y_score = y_pos_score * 0.6 + y_size_score * 0.4;
         ((x_score + y_score) * 0.5) * 100.0
     }
+
+    /// Get the interpolated power for a magnet at a given turn number.
+    /// Linearly interpolates between ramp points at turns 0, 2, 5, 8.
+    /// After turn 8, holds the last ramp value.
+    fn interpolated_power(&self, magnet_idx: usize, turn: u32) -> f32 {
+        let ramp = &self.ramp_powers[magnet_idx];
+        if turn <= RAMP_TURNS[0] {
+            return ramp[0];
+        }
+        if turn >= RAMP_TURNS[3] {
+            return ramp[3];
+        }
+        for i in 0..3 {
+            if turn >= RAMP_TURNS[i] && turn < RAMP_TURNS[i + 1] {
+                let t = (turn - RAMP_TURNS[i]) as f32 / (RAMP_TURNS[i + 1] - RAMP_TURNS[i]) as f32;
+                return ramp[i] + t * (ramp[i + 1] - ramp[i]);
+            }
+        }
+        ramp[3]
+    }
+
+    /// Clamp a ramp value so it's within ±MAX_RAMP_DELTA of its neighbors.
+    fn clamp_ramp_value(&self, magnet_idx: usize, ramp_idx: usize, value: f32) -> f32 {
+        let mut v = value;
+        if ramp_idx > 0 {
+            let prev = self.ramp_powers[magnet_idx][ramp_idx - 1];
+            v = v.clamp(prev - MAX_RAMP_DELTA, prev + MAX_RAMP_DELTA);
+        }
+        if ramp_idx < 3 {
+            let next = self.ramp_powers[magnet_idx][ramp_idx + 1];
+            v = v.clamp(next - MAX_RAMP_DELTA, next + MAX_RAMP_DELTA);
+        }
+        v
+    }
+
+    /// Sync all magnets' display power from ramp_powers at the selected ramp point.
+    fn sync_display_from_ramp(&mut self) {
+        let ramp_idx = self.selected_ramp;
+        for i in 0..TOTAL_MAGNETS {
+            self.magnets[i].power = self.ramp_powers[i][ramp_idx];
+        }
+    }
+
+    /// Update all magnets' effective power from ramp interpolation based on current turn.
+    fn sync_interpolated_powers(&mut self) {
+        let turn = self.turns_completed;
+        for i in 0..TOTAL_MAGNETS {
+            self.magnets[i].power = self.interpolated_power(i, turn);
+        }
+    }
+
+    /// Adjust a single magnet's ramp power at the selected ramp point with constraint enforcement.
+    fn adjust_ramp_power(&mut self, magnet_idx: usize, delta: f32) {
+        let ramp_idx = self.selected_ramp;
+        let new_val = self.ramp_powers[magnet_idx][ramp_idx] + delta;
+        let clamped = self.clamp_ramp_value(magnet_idx, ramp_idx, new_val);
+        self.ramp_powers[magnet_idx][ramp_idx] = clamped;
+        self.magnets[magnet_idx].power = clamped;
+    }
 }
 
 impl Game for BeamGame {
@@ -520,6 +595,8 @@ impl Game for BeamGame {
         if self.paused || self.beam_lost || self.beam_completed { return; }
         self.tick += 1;
         if self.beam_running {
+            // Update magnet powers from ramp interpolation based on current turn
+            self.sync_interpolated_powers();
             self.advance_beam();
             // Record history every few ticks
             if self.tick % 3 == 0 {
@@ -624,47 +701,44 @@ impl Game for BeamGame {
                     }
                     KeyCode::Up => {
                         if let Some(ref bump) = self.bump {
-                            // Bump mode: adjust all bump trims in unison with coefficients
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
-                            // Adjust both X and Y trim magnets in the bump
                             for (sec, coeff) in &sec_coeffs {
-                                // HTrim for X
                                 let ht_idx = sec * MAGNETS_PER_SECTION + 5;
-                                self.magnets[ht_idx].power += speed * coeff;
-                                // VTrim for Y
+                                self.adjust_ramp_power(ht_idx, speed * coeff);
                                 let vt_idx = sec * MAGNETS_PER_SECTION + 4;
-                                self.magnets[vt_idx].power += speed * coeff;
+                                self.adjust_ramp_power(vt_idx, speed * coeff);
                             }
                         } else {
-                            self.magnets[self.selected].power += self.adjust_speed;
+                            let sel = self.selected;
+                            let spd = self.adjust_speed;
+                            self.adjust_ramp_power(sel, spd);
                         }
                     }
                     KeyCode::Down => {
                         if let Some(ref bump) = self.bump {
-                            // Bump mode: adjust all bump trims in unison with coefficients (reverse)
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
                             for (sec, coeff) in &sec_coeffs {
-                                // HTrim for X
                                 let ht_idx = sec * MAGNETS_PER_SECTION + 5;
-                                self.magnets[ht_idx].power -= speed * coeff;
-                                // VTrim for Y
+                                self.adjust_ramp_power(ht_idx, -(speed * coeff));
                                 let vt_idx = sec * MAGNETS_PER_SECTION + 4;
-                                self.magnets[vt_idx].power -= speed * coeff;
+                                self.adjust_ramp_power(vt_idx, -(speed * coeff));
                             }
                         } else {
-                            self.magnets[self.selected].power -= self.adjust_speed;
+                            let sel = self.selected;
+                            let spd = self.adjust_speed;
+                            self.adjust_ramp_power(sel, -spd);
                         }
                     }
-                    // Bump mode: W/S to adjust only X trims, A (not used)/Z (not used) could be added
+                    // Bump mode: W/S to adjust only X trims
                     KeyCode::Char('w') | KeyCode::Char('W') => {
                         if let Some(ref bump) = self.bump {
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
                             for (sec, coeff) in &sec_coeffs {
-                                let ht_idx = sec * MAGNETS_PER_SECTION + 5; // HTrim for X
-                                self.magnets[ht_idx].power += speed * coeff;
+                                let ht_idx = sec * MAGNETS_PER_SECTION + 5;
+                                self.adjust_ramp_power(ht_idx, speed * coeff);
                             }
                         }
                     }
@@ -673,8 +747,8 @@ impl Game for BeamGame {
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
                             for (sec, coeff) in &sec_coeffs {
-                                let ht_idx = sec * MAGNETS_PER_SECTION + 5; // HTrim for X
-                                self.magnets[ht_idx].power -= speed * coeff;
+                                let ht_idx = sec * MAGNETS_PER_SECTION + 5;
+                                self.adjust_ramp_power(ht_idx, -(speed * coeff));
                             }
                         }
                     }
@@ -684,8 +758,8 @@ impl Game for BeamGame {
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
                             for (sec, coeff) in &sec_coeffs {
-                                let vt_idx = sec * MAGNETS_PER_SECTION + 4; // VTrim for Y
-                                self.magnets[vt_idx].power += speed * coeff;
+                                let vt_idx = sec * MAGNETS_PER_SECTION + 4;
+                                self.adjust_ramp_power(vt_idx, speed * coeff);
                             }
                         }
                     }
@@ -694,8 +768,8 @@ impl Game for BeamGame {
                             let sec_coeffs = bump.section_coefficients();
                             let speed = self.adjust_speed;
                             for (sec, coeff) in &sec_coeffs {
-                                let vt_idx = sec * MAGNETS_PER_SECTION + 4; // VTrim for Y
-                                self.magnets[vt_idx].power -= speed * coeff;
+                                let vt_idx = sec * MAGNETS_PER_SECTION + 4;
+                                self.adjust_ramp_power(vt_idx, -(speed * coeff));
                             }
                         }
                     }
@@ -720,91 +794,99 @@ impl Game for BeamGame {
                             self.prev_section();
                         }
                     }
-                    // Zero the selected magnet (or zero bump trims in bump mode)
+                    // Zero the selected magnet's ramp value (or zero bump trims in bump mode)
                     KeyCode::Char('0') => {
                         if let Some(ref bump) = self.bump {
-                            // Zero all trims in the bump
                             let sec_coeffs = bump.section_coefficients();
+                            let ramp_idx = self.selected_ramp;
                             for (sec, _) in &sec_coeffs {
                                 let ht_idx = sec * MAGNETS_PER_SECTION + 5;
                                 let vt_idx = sec * MAGNETS_PER_SECTION + 4;
-                                self.magnets[ht_idx].power = 0.0;
-                                self.magnets[vt_idx].power = 0.0;
+                                let ht_clamped = self.clamp_ramp_value(ht_idx, ramp_idx, 0.0);
+                                self.ramp_powers[ht_idx][ramp_idx] = ht_clamped;
+                                self.magnets[ht_idx].power = ht_clamped;
+                                let vt_clamped = self.clamp_ramp_value(vt_idx, ramp_idx, 0.0);
+                                self.ramp_powers[vt_idx][ramp_idx] = vt_clamped;
+                                self.magnets[vt_idx].power = vt_clamped;
                             }
                             self.message = Some((
-                                "Zeroed all bump trims!".to_string(),
-                                30,
-                                Color::Rgb(255, 200, 80),
+                                format!("Zeroed bump trims (ramp {})", self.selected_ramp + 1),
+                                30, Color::Rgb(255, 200, 80),
                             ));
                         } else {
-                            self.magnets[self.selected].power = 0.0;
+                            let sel = self.selected;
+                            let ramp_idx = self.selected_ramp;
+                            let clamped = self.clamp_ramp_value(sel, ramp_idx, 0.0);
+                            self.ramp_powers[sel][ramp_idx] = clamped;
+                            self.magnets[sel].power = clamped;
                         }
                     }
-                    // Toggle bump modes: 3-bump, 4-bump, 5-bump
+                    // Ramp point selection: keys 1-4 select which ramp point to edit
+                    KeyCode::Char('1') => {
+                        self.selected_ramp = 0;
+                        self.sync_display_from_ramp();
+                        self.message = Some((
+                            format!("Ramp 1 (Turn {})", RAMP_TURNS[0]),
+                            30, Color::Rgb(120, 200, 255),
+                        ));
+                    }
+                    KeyCode::Char('2') => {
+                        self.selected_ramp = 1;
+                        self.sync_display_from_ramp();
+                        self.message = Some((
+                            format!("Ramp 2 (Turn {})", RAMP_TURNS[1]),
+                            30, Color::Rgb(120, 200, 255),
+                        ));
+                    }
                     KeyCode::Char('3') => {
-                        if self.bump.as_ref().map_or(false, |b| b.size == 3) {
-                            self.bump = None;
-                            self.message = Some((
-                                "Bump mode OFF".to_string(), 30,
-                                Color::Rgb(140, 140, 160),
-                            ));
-                        } else {
-                            let start = self.bump.as_ref()
-                                .map_or(self.selected_section(), |b| b.start_section);
-                            self.bump = Some(BumpConfig::new(3, start));
-                            self.message = Some((
-                                format!("3-Bump mode ON (sec {}-{})",
-                                    start + 1, (start + 2) % NUM_SECTIONS + 1),
-                                45,
-                                Color::Rgb(80, 255, 200),
-                            ));
-                        }
+                        self.selected_ramp = 2;
+                        self.sync_display_from_ramp();
+                        self.message = Some((
+                            format!("Ramp 3 (Turn {})", RAMP_TURNS[2]),
+                            30, Color::Rgb(120, 200, 255),
+                        ));
                     }
                     KeyCode::Char('4') => {
-                        if self.bump.as_ref().map_or(false, |b| b.size == 4) {
-                            self.bump = None;
-                            self.message = Some((
-                                "Bump mode OFF".to_string(), 30,
-                                Color::Rgb(140, 140, 160),
-                            ));
-                        } else {
-                            let start = self.bump.as_ref()
-                                .map_or(self.selected_section(), |b| b.start_section);
-                            self.bump = Some(BumpConfig::new(4, start));
-                            self.message = Some((
-                                format!("4-Bump mode ON (sec {}-{})",
-                                    start + 1, (start + 3) % NUM_SECTIONS + 1),
-                                45,
-                                Color::Rgb(80, 255, 200),
-                            ));
-                        }
+                        self.selected_ramp = 3;
+                        self.sync_display_from_ramp();
+                        self.message = Some((
+                            format!("Ramp 4 (Turn {})", RAMP_TURNS[3]),
+                            30, Color::Rgb(120, 200, 255),
+                        ));
                     }
-                    KeyCode::Char('5') => {
-                        if self.bump.as_ref().map_or(false, |b| b.size == 5) {
-                            self.bump = None;
-                            self.message = Some((
-                                "Bump mode OFF".to_string(), 30,
-                                Color::Rgb(140, 140, 160),
-                            ));
-                        } else {
-                            let start = self.bump.as_ref()
-                                .map_or(self.selected_section(), |b| b.start_section);
-                            self.bump = Some(BumpConfig::new(5, start));
-                            self.message = Some((
-                                format!("5-Bump mode ON (sec {}-{})",
-                                    start + 1, (start + 4) % NUM_SECTIONS + 1),
-                                45,
-                                Color::Rgb(80, 255, 200),
-                            ));
-                        }
-                    }
-                    // Exit bump mode
+                    // Cycle bump modes: B cycles off -> 3 -> 4 -> 5 -> off
                     KeyCode::Char('b') | KeyCode::Char('B') => {
-                        if self.bump.is_some() {
-                            self.bump = None;
+                        if let Some(ref bump) = self.bump {
+                            let start = bump.start_section;
+                            match bump.size {
+                                3 => {
+                                    self.bump = Some(BumpConfig::new(4, start));
+                                    self.message = Some((
+                                        format!("4-Bump mode (sec {}-{})", start + 1, (start + 3) % NUM_SECTIONS + 1),
+                                        45, Color::Rgb(80, 255, 200),
+                                    ));
+                                }
+                                4 => {
+                                    self.bump = Some(BumpConfig::new(5, start));
+                                    self.message = Some((
+                                        format!("5-Bump mode (sec {}-{})", start + 1, (start + 4) % NUM_SECTIONS + 1),
+                                        45, Color::Rgb(80, 255, 200),
+                                    ));
+                                }
+                                _ => {
+                                    self.bump = None;
+                                    self.message = Some((
+                                        "Bump mode OFF".to_string(), 30,
+                                        Color::Rgb(140, 140, 160),
+                                    ));
+                                }
+                            }
+                        } else {
+                            let start = self.selected_section();
+                            self.bump = Some(BumpConfig::new(3, start));
                             self.message = Some((
-                                "Bump mode OFF".to_string(), 30,
-                                Color::Rgb(140, 140, 160),
+                                format!("3-Bump mode (sec {}-{})", start + 1, (start + 2) % NUM_SECTIONS + 1),
+                                45, Color::Rgb(80, 255, 200),
                             ));
                         }
                     }
@@ -859,6 +941,11 @@ impl Game for BeamGame {
                 format!("[{}] ", self.difficulty.label()),
                 Style::default().fg(self.difficulty.color()).add_modifier(Modifier::BOLD),
             ),
+            Span::styled(
+                format!("Ramp:{}/4(T{}) ", self.selected_ramp + 1, RAMP_TURNS[self.selected_ramp]),
+                Style::default().fg(Color::Rgb(180, 140, 255)).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!("Turns: {}/{} ", self.turns_completed, GOAL_TURNS),
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
@@ -1383,7 +1470,7 @@ impl Game for BeamGame {
             // Bump mode help bar
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(" BUMP ", Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)),
-                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 3/4/5 Size │ 0 Zero │ B Exit │ +/- Step │ P Pause │ Esc",
+                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 1-4 Ramp │ 0 Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
@@ -1391,7 +1478,7 @@ impl Game for BeamGame {
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(if self.beam_running { " SPACE: running " } else { " SPACE: start " },
                     Style::default().fg(if self.beam_running { Color::Green } else { Color::Yellow })),
-                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 3/4/5 Bump │ C Copy │ +/- Step │ 0 Zero │ D Diff │ P Pause │ Esc",
+                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 1-4 Ramp │ B Bump │ C Copy │ +/- Step │ 0 Zero │ D Diff │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
@@ -1406,6 +1493,8 @@ impl Game for BeamGame {
         let selected = self.selected;
         let adjust_speed = self.adjust_speed;
         let bump = self.bump.clone();
+        let ramp_powers = self.ramp_powers.clone();
+        let selected_ramp = self.selected_ramp;
         *self = BeamGame::new();
         self.best_turns = best;
         self.difficulty = diff;
@@ -1414,5 +1503,9 @@ impl Game for BeamGame {
         self.selected = selected;
         self.adjust_speed = adjust_speed;
         self.bump = bump;
+        self.ramp_powers = ramp_powers;
+        self.selected_ramp = selected_ramp;
+        // Sync display to show selected ramp values
+        self.sync_display_from_ramp();
     }
 }
