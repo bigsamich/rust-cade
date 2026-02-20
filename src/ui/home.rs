@@ -11,15 +11,257 @@ const BANNER: &str = r#"
  ║  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝ ╚══════╝ ║
  ╚═══════════════════════════════════════════════════════════════════╝"#;
 
-pub fn render_home(frame: &mut Frame, area: Rect) {
-    // Use proportional layout that adapts to window size
+struct GameTile {
+    key: &'static str,
+    icon: &'static str,
+    name: &'static str,
+    desc: &'static str,
+    color: Color,
+    border_color: Color,
+}
+
+const GAME_TILES: [GameTile; 6] = [
+    GameTile { key: "1", icon: "🐸", name: "Frogger", desc: "Cross the road\nand river!", color: Color::Rgb(80, 220, 80), border_color: Color::Rgb(40, 120, 40) },
+    GameTile { key: "2", icon: "🧱", name: "Breakout", desc: "Smash bricks\nwith the ball!", color: Color::Rgb(220, 80, 80), border_color: Color::Rgb(120, 40, 40) },
+    GameTile { key: "3", icon: "🦖", name: "Dino Run", desc: "Jump obstacles\nin endless run!", color: Color::Rgb(200, 120, 255), border_color: Color::Rgb(100, 60, 140) },
+    GameTile { key: "4", icon: "🎱", name: "Pinball", desc: "Hit bumpers\nfor combos!", color: Color::Rgb(255, 200, 80), border_color: Color::Rgb(140, 100, 40) },
+    GameTile { key: "5", icon: "🟦", name: "JezzBall", desc: "Build walls to\ntrap the balls!", color: Color::Rgb(100, 180, 255), border_color: Color::Rgb(50, 90, 140) },
+    GameTile { key: "6", icon: "⚛", name: "Beam", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
+];
+
+fn render_game_tile(frame: &mut Frame, area: Rect, tile: &GameTile, selected: bool) {
+    let border_color = if selected { Color::Rgb(255, 220, 80) } else { tile.border_color };
+    let border_type = if selected { BorderType::Double } else { BorderType::Rounded };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(border_type)
+        .border_style(Style::default().fg(border_color));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 { return; }
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Key + Icon + Name line
+    let name_color = if selected { Color::Rgb(255, 255, 255) } else { tile.color };
+    lines.push(Line::from(vec![
+        Span::styled(format!("[{}] ", tile.key), Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} ", tile.icon), Style::default()),
+        Span::styled(tile.name, Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+    ]));
+
+    // Description lines
+    for desc_line in tile.desc.split('\n') {
+        lines.push(Line::from(vec![
+            Span::styled(desc_line, Style::default().fg(if selected { Color::Rgb(180, 180, 200) } else { Color::Rgb(120, 120, 140) })),
+        ]));
+    }
+
+    // Selected indicator
+    if selected {
+        lines.push(Line::from(vec![
+            Span::styled("▶ Enter to play", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
+        ]));
+    }
+
+    let p = Paragraph::new(lines).alignment(Alignment::Center);
+    frame.render_widget(p, inner);
+}
+
+fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
+    match game_idx {
+        0 => vec![ // Frogger
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  🐸 Frogger", Style::default().fg(Color::Rgb(80, 220, 80)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Help the frog cross safely!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ↑ ↓ ← →         ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Move frog", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        1 => vec![ // Breakout
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  🧱 Breakout", Style::default().fg(Color::Rgb(220, 80, 80)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Smash all the bricks!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ← / →            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Move paddle", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Launch ball", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        2 => vec![ // Dino Run
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  🦖 Dino Run", Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Endless runner — dodge everything!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    Space / ↑        ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Jump", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    ↓                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Duck", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        3 => vec![ // Pinball
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  🎱 Pinball", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Hit bumpers for combos!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ← / →            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Flippers", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Launch ball", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        4 => vec![ // JezzBall
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  🟦 JezzBall", Style::default().fg(Color::Rgb(100, 180, 255)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Build walls to trap balls!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ↑ ↓ ← →         ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Move cursor", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Place wall", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        5 => vec![ // Beam
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  ⚛ Beam", Style::default().fg(Color::Rgb(120, 200, 255)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Tune magnets, steer a beam", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(vec![
+                Span::styled("  5 turns, lowest score wins!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ↑ / ↓            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Select magnet", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    ← / →            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Adjust power", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    [ / ]            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Prev/next section", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    + / -            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Step size", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    0-9              ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Ramp point", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    B                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Bump mode (3/4/5/off)", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    C                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Copy section to all", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Z                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Zero magnet", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    D                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Difficulty toggle", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    W/S  E/Q         ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Bump X / Y only", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        _ => vec![],
+    }
+}
+
+pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(10), // Banner
             Constraint::Length(2),  // Subtitle
-            Constraint::Min(10),   // Games list
-            Constraint::Min(12),   // Controls
+            Constraint::Length(12), // Game tiles (2 rows)
+            Constraint::Min(10),   // Controls area
             Constraint::Length(2),  // Footer
         ])
         .split(area);
@@ -42,58 +284,60 @@ pub fn render_home(frame: &mut Frame, area: Rect) {
     .alignment(Alignment::Center);
     frame.render_widget(subtitle, chunks[1]);
 
-    // Games list
-    let games = Paragraph::new(vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [1] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("🐸 Frogger    ", Style::default().fg(Color::Rgb(80, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Help the frog cross the road and river!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [2] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("🧱 Breakout   ", Style::default().fg(Color::Rgb(220, 80, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Smash all the bricks with the bouncing ball!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [3] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("🦖 Dino Run   ", Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Jump over obstacles in this endless runner!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [4] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("🎱 Pinball    ", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Launch the ball and hit bumpers for combos!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [5] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("🟦 JezzBall   ", Style::default().fg(Color::Rgb(100, 180, 255)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Build walls to trap the bouncing balls!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  [6] ", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled("⚛ Beam       ", Style::default().fg(Color::Rgb(120, 200, 255)).add_modifier(Modifier::BOLD)),
-            Span::styled("─ Steer a particle beam around an accelerator ring!", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(""),
-    ])
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Rgb(60, 150, 200)))
-            .title(" 🎮 Games ")
-            .title_style(Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
-    )
-    .alignment(Alignment::Center);
-    frame.render_widget(games, chunks[2]);
+    // Games section title block
+    let games_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Rgb(60, 150, 200)))
+        .title(" 🎮 Games — ↑↓←→ Select, Enter to Play ")
+        .title_style(Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD));
+    let games_inner = games_block.inner(chunks[2]);
+    frame.render_widget(games_block, chunks[2]);
 
-    // Controls
+    // 2 rows of 3 tiles
+    let tile_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Ratio(1, 2),
+            Constraint::Ratio(1, 2),
+        ])
+        .split(games_inner);
+
+    let top_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+        ])
+        .split(tile_rows[0]);
+
+    let bot_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+        ])
+        .split(tile_rows[1]);
+
+    for i in 0..3 {
+        render_game_tile(frame, top_cols[i], &GAME_TILES[i], selected_game == i);
+    }
+    for i in 0..3 {
+        render_game_tile(frame, bot_cols[i], &GAME_TILES[i + 3], selected_game == i + 3);
+    }
+
+    // Controls area: split horizontally - navigation left, game controls right
+    let ctrl_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(40),
+            Constraint::Percentage(60),
+        ])
+        .split(chunks[3]);
+
+    // Navigation Control (left)
     let controls = Paragraph::new(vec![
         Line::from(""),
         Line::from(vec![
@@ -101,11 +345,19 @@ pub fn render_home(frame: &mut Frame, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("    Tab / Shift+Tab  ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Switch between tabs", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("Switch tabs", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
             Span::styled("    1-6              ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Quick-launch a game", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("Launch game", Style::default().fg(Color::Rgb(140, 140, 140))),
+        ]),
+        Line::from(vec![
+            Span::styled("    ↑ ↓ ← →         ", Style::default().fg(Color::Rgb(80, 200, 255))),
+            Span::styled("Select game", Style::default().fg(Color::Rgb(140, 140, 140))),
+        ]),
+        Line::from(vec![
+            Span::styled("    Enter            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+            Span::styled("Play selected", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
             Span::styled("    Esc              ", Style::default().fg(Color::Rgb(80, 200, 255))),
@@ -113,23 +365,15 @@ pub fn render_home(frame: &mut Frame, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("    q / Ctrl+C       ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Quit RustCade", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("Quit", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  🎮 In Games", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("    Arrow Keys       ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Move / Control", Style::default().fg(Color::Rgb(140, 140, 140))),
-        ]),
-        Line::from(vec![
-            Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Action (Jump / Launch)", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("  🎮 Common", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
             Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
-            Span::styled("Restart current game", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("Restart game", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
             Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
@@ -141,17 +385,28 @@ pub fn render_home(frame: &mut Frame, area: Rect) {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Rgb(60, 150, 200)))
-            .title(" ⌨ Controls ")
+            .title(" ⌨ Navigation Control ")
             .title_style(Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
     );
-    frame.render_widget(controls, chunks[3]);
+    frame.render_widget(controls, ctrl_cols[0]);
+
+    // Game Control (right) - shows controls for the selected game
+    let game_ctrl_lines = game_controls(selected_game);
+    let game_ctrl = Paragraph::new(game_ctrl_lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(50, 100, 140)))
+                .title(format!(" 🎮 {} Control ", GAME_TILES[selected_game].name))
+                .title_style(Style::default().fg(GAME_TILES[selected_game].color).add_modifier(Modifier::BOLD)),
+        );
+    frame.render_widget(game_ctrl, ctrl_cols[1]);
 
     // Footer
     let footer = Paragraph::new(Line::from(vec![
-        Span::styled(
-            "  Built with ❤ using Rust + Ratatui  ",
-            Style::default().fg(Color::Rgb(80, 80, 100)).add_modifier(Modifier::ITALIC),
-        ),
+        Span::styled("  🦀 ", Style::default().fg(Color::Rgb(255, 100, 50))),
+        Span::styled("v0.9.1", Style::default().fg(Color::Rgb(80, 80, 100))),
     ]))
     .alignment(Alignment::Center);
     frame.render_widget(footer, chunks[4]);

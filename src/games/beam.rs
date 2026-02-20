@@ -165,7 +165,7 @@ const LOSS_ZONE: f32 = 25.0; // beam edges past this start accumulating losses
 const MAX_LOSSES: f32 = 100.0; // game over when losses reach this
 const MAGNETS_PER_SECTION: usize = 6;
 const TOTAL_MAGNETS: usize = NUM_SECTIONS * MAGNETS_PER_SECTION;
-const GOAL_TURNS: u32 = 10;
+const GOAL_TURNS: u32 = 5;
 const MAX_HISTORY: usize = 60;
 const NUM_RAMPS: usize = 10;
 const MAX_RAMP_DELTA: f32 = 0.5;
@@ -250,6 +250,10 @@ pub struct BeamGame {
     // Power supply ramp: 10 settings per magnet, one per turn (keys 0-9)
     ramp_powers: Vec<[f32; 10]>,  // Per-magnet power at each ramp point
     selected_ramp: usize,          // Which ramp point is being edited (0-9)
+    // Closed orbit target: beam should return to this point each turn
+    target_x: f32,
+    target_y: f32,
+    turn_positions: Vec<(f32, f32)>, // beam (x, y) at end of each turn
 }
 
 impl BeamGame {
@@ -321,6 +325,9 @@ impl BeamGame {
             bump: None,
             ramp_powers,
             selected_ramp: 0,
+            target_x: rng.gen_range(-5.0..5.0),
+            target_y: rng.gen_range(-5.0..5.0),
+            turn_positions: Vec::new(),
         }
     }
 
@@ -447,11 +454,16 @@ impl BeamGame {
                 self.beam_section += 1;
                 if self.beam_section >= NUM_SECTIONS {
                     self.beam_section = 0;
+                    // Record beam position at turn boundary for bullseye plot
+                    self.turn_positions.push((self.beam_position, self.beam_y_position));
+                    if self.turn_positions.len() > 20 {
+                        self.turn_positions.remove(0);
+                    }
                     self.turns_completed += 1;
                     if self.turns_completed > self.best_turns {
                         self.best_turns = self.turns_completed;
                     }
-                    if self.turns_completed >= 10 {
+                    if self.turns_completed >= GOAL_TURNS {
                         self.beam_completed = true;
                     }
                 }
@@ -627,10 +639,10 @@ impl Game for BeamGame {
                     KeyCode::Char(' ') => {
                         if !self.beam_running {
                             self.beam_running = true;
-                            self.beam_position = 0.0;
+                            self.beam_position = self.target_x;
                             self.beam_angle = 0.0;
                             self.beam_size = 10.0;
-                            self.beam_y_position = 0.0;
+                            self.beam_y_position = self.target_y;
                             self.beam_y_angle = 0.0;
                             self.beam_y_size = 10.0;
                             self.beam_section = 0;
@@ -642,6 +654,46 @@ impl Game for BeamGame {
                             self.size_history.clear();
                             self.y_pos_history.clear();
                             self.y_size_history.clear();
+                        }
+                    }
+                    KeyCode::Up => {
+                        if self.bump.is_some() {
+                            // In bump mode: adjust X+Y bump trims up
+                            if let Some(ref bump) = self.bump {
+                                let sec_coeffs = bump.section_coefficients();
+                                let speed = self.adjust_speed;
+                                for (sec, coeff) in &sec_coeffs {
+                                    let ht_idx = sec * MAGNETS_PER_SECTION + 5;
+                                    self.adjust_ramp_power(ht_idx, speed * coeff);
+                                    let vt_idx = sec * MAGNETS_PER_SECTION + 4;
+                                    self.adjust_ramp_power(vt_idx, speed * coeff);
+                                }
+                            }
+                        } else {
+                            // Select previous magnet
+                            if self.selected == 0 {
+                                self.selected = TOTAL_MAGNETS - 1;
+                            } else {
+                                self.selected -= 1;
+                            }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if self.bump.is_some() {
+                            // In bump mode: adjust X+Y bump trims down
+                            if let Some(ref bump) = self.bump {
+                                let sec_coeffs = bump.section_coefficients();
+                                let speed = self.adjust_speed;
+                                for (sec, coeff) in &sec_coeffs {
+                                    let ht_idx = sec * MAGNETS_PER_SECTION + 5;
+                                    self.adjust_ramp_power(ht_idx, -(speed * coeff));
+                                    let vt_idx = sec * MAGNETS_PER_SECTION + 4;
+                                    self.adjust_ramp_power(vt_idx, -(speed * coeff));
+                                }
+                            }
+                        } else {
+                            // Select next magnet
+                            self.selected = (self.selected + 1) % TOTAL_MAGNETS;
                         }
                     }
                     KeyCode::Left => {
@@ -662,11 +714,10 @@ impl Game for BeamGame {
                                 ));
                             }
                         } else {
-                            if self.selected == 0 {
-                                self.selected = TOTAL_MAGNETS - 1;
-                            } else {
-                                self.selected -= 1;
-                            }
+                            // Decrease power
+                            let sel = self.selected;
+                            let spd = self.adjust_speed;
+                            self.adjust_ramp_power(sel, -spd);
                         }
                     }
                     KeyCode::Right => {
@@ -683,39 +734,10 @@ impl Game for BeamGame {
                                 ));
                             }
                         } else {
-                            self.selected = (self.selected + 1) % TOTAL_MAGNETS;
-                        }
-                    }
-                    KeyCode::Up => {
-                        if let Some(ref bump) = self.bump {
-                            let sec_coeffs = bump.section_coefficients();
-                            let speed = self.adjust_speed;
-                            for (sec, coeff) in &sec_coeffs {
-                                let ht_idx = sec * MAGNETS_PER_SECTION + 5;
-                                self.adjust_ramp_power(ht_idx, speed * coeff);
-                                let vt_idx = sec * MAGNETS_PER_SECTION + 4;
-                                self.adjust_ramp_power(vt_idx, speed * coeff);
-                            }
-                        } else {
+                            // Increase power
                             let sel = self.selected;
                             let spd = self.adjust_speed;
                             self.adjust_ramp_power(sel, spd);
-                        }
-                    }
-                    KeyCode::Down => {
-                        if let Some(ref bump) = self.bump {
-                            let sec_coeffs = bump.section_coefficients();
-                            let speed = self.adjust_speed;
-                            for (sec, coeff) in &sec_coeffs {
-                                let ht_idx = sec * MAGNETS_PER_SECTION + 5;
-                                self.adjust_ramp_power(ht_idx, -(speed * coeff));
-                                let vt_idx = sec * MAGNETS_PER_SECTION + 4;
-                                self.adjust_ramp_power(vt_idx, -(speed * coeff));
-                            }
-                        } else {
-                            let sel = self.selected;
-                            let spd = self.adjust_speed;
-                            self.adjust_ramp_power(sel, -spd);
                         }
                     }
                     // Bump mode: W/S to adjust only X trims
@@ -888,11 +910,19 @@ impl Game for BeamGame {
                 Constraint::Length(1),  // Status
                 Constraint::Length(2),  // Beam X display bar
                 Constraint::Length(2),  // Beam Y display bar
-                Constraint::Min(8),    // Ring visualization
-                Constraint::Length(5),  // Magnet detail panel
+                Constraint::Min(8),    // Middle: magnet control + ring
                 Constraint::Length(1),  // Help
             ])
             .split(inner);
+
+        // Split middle area: magnet control on left, ring visualization on right
+        let middle = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(30), // Magnet control panel
+                Constraint::Min(20),   // Ring visualization
+            ])
+            .split(chunks[3]);
 
         // Status bar
         let stability = self.stability_score();
@@ -956,6 +986,13 @@ impl Game for BeamGame {
                 Style::default().fg(stab_color).add_modifier(Modifier::BOLD),
             ));
         }
+        // Score: sum of absolute power across all magnets
+        let score: f32 = self.magnets.iter().map(|m| m.power.abs()).sum();
+        status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        status_spans.push(Span::styled(
+            format!("Score: {:.3} ", score),
+            Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD),
+        ));
         status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
         status_spans.push(Span::styled(
             format!("Step: {:.3} ", self.adjust_speed),
@@ -1093,8 +1130,8 @@ impl Game for BeamGame {
         frame.render_widget(Paragraph::new(y_bar_lines), chunks[2]);
 
         // Ring visualization - show all 24 sections as a ring layout
-        let ring_w = chunks[3].width as usize;
-        let ring_h = chunks[3].height as usize;
+        let ring_w = middle[1].width as usize;
+        let ring_h = middle[1].height as usize;
         let cx = ring_w as f32 / 2.0;
         let cy = ring_h as f32 / 2.0;
         let rx = (ring_w as f32 * 0.35).min(cx - 3.0);
@@ -1247,174 +1284,283 @@ impl Game for BeamGame {
                     .collect::<Vec<_>>())
             })
             .collect();
-        frame.render_widget(Paragraph::new(lines), chunks[3]);
+        frame.render_widget(Paragraph::new(lines), middle[1]);
 
-        // Magnet detail panel - show magnet info or bump info
+        // Split left panel: magnet control on top, bullseye on bottom
+        let left_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(14), // Magnet control panel
+                Constraint::Min(5),    // Bullseye closed orbit plot
+            ])
+            .split(middle[0]);
+
+        // Magnet detail panel - show magnet info or bump info (LEFT of ring, top)
         let sec = self.selected_section();
         let elem = self.selected_element();
         let sec_base = sec * MAGNETS_PER_SECTION;
 
         if let Some(ref bump) = self.bump {
-            // BUMP MODE detail panel
+            // BUMP MODE detail panel (vertical layout)
             let sec_coeffs = bump.section_coefficients();
+            let mut panel_lines: Vec<Line> = Vec::new();
 
-            // Line 1: Bump header
-            let mut header_spans = vec![
+            // Bump header
+            panel_lines.push(Line::from(vec![
                 Span::styled(
-                    format!(" ⊕⊖ {}-BUMP ", bump.size),
+                    format!(" ⊕⊖ {}-BUMP", bump.size),
                     Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled("Sections: ", Style::default().fg(Color::Rgb(160, 160, 180))),
-            ];
-            for (i, (s, c)) in sec_coeffs.iter().enumerate() {
-                if i > 0 {
-                    header_spans.push(Span::styled("→", Style::default().fg(Color::Rgb(50, 50, 70))));
-                }
+            ]));
+
+            // Section coefficients stacked vertically
+            for (s, c) in &sec_coeffs {
                 let sign_str = if *c > 0.0 { "+" } else { "−" };
                 let color = if *c > 0.0 {
                     Color::Rgb(80, 255, 180)
                 } else {
                     Color::Rgb(255, 140, 80)
                 };
-                header_spans.push(Span::styled(
-                    format!("{}{}(×{:.0})", sign_str, s + 1, c.abs()),
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ));
+                panel_lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {}S{}(×{:.0})", sign_str, s + 1, c.abs()),
+                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                    ),
+                ]));
             }
-            let header_line = Line::from(header_spans);
 
-            // Line 2: Show current trim values for each section in the bump
-            let mut trim_spans: Vec<Span> = vec![
-                Span::styled(" HT(X): ", Style::default().fg(Color::Rgb(255, 180, 120))),
-            ];
-            for (i, (s, _)) in sec_coeffs.iter().enumerate() {
-                if i > 0 {
-                    trim_spans.push(Span::styled(" ", Style::default()));
-                }
+            // Blank separator
+            panel_lines.push(Line::from(Span::styled("", Style::default())));
+
+            // Show HT and VT values for each bump section, stacked
+            for (s, _) in &sec_coeffs {
                 let ht_idx = s * MAGNETS_PER_SECTION + 5;
-                trim_spans.push(Span::styled(
-                    format!("{:+.3}", self.magnets[ht_idx].power),
-                    Style::default().fg(Color::Rgb(255, 200, 140)),
-                ));
-            }
-            trim_spans.push(Span::styled("  VT(Y): ", Style::default().fg(Color::Rgb(200, 120, 255))));
-            for (i, (s, _)) in sec_coeffs.iter().enumerate() {
-                if i > 0 {
-                    trim_spans.push(Span::styled(" ", Style::default()));
-                }
                 let vt_idx = s * MAGNETS_PER_SECTION + 4;
-                trim_spans.push(Span::styled(
-                    format!("{:+.3}", self.magnets[vt_idx].power),
-                    Style::default().fg(Color::Rgb(220, 160, 255)),
-                ));
+                panel_lines.push(Line::from(vec![
+                    Span::styled(format!("  S{} ", s + 1), Style::default().fg(Color::Rgb(160, 160, 180))),
+                    Span::styled("HT", Style::default().fg(Color::Rgb(255, 180, 120))),
+                    Span::styled(format!("{:+.3}", self.magnets[ht_idx].power), Style::default().fg(Color::Rgb(255, 200, 140))),
+                ]));
+                panel_lines.push(Line::from(vec![
+                    Span::styled("     ", Style::default()),
+                    Span::styled("VT", Style::default().fg(Color::Rgb(200, 120, 255))),
+                    Span::styled(format!("{:+.3}", self.magnets[vt_idx].power), Style::default().fg(Color::Rgb(220, 160, 255))),
+                ]));
             }
-            let trim_line = Line::from(trim_spans);
 
-            // Line 3: Bump controls summary
-            let controls_line = Line::from(vec![
-                Span::styled(" ↑↓ ", Style::default().fg(Color::Rgb(255, 255, 100)).add_modifier(Modifier::BOLD)),
-                Span::styled("X+Y bump ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ W/S ", Style::default().fg(Color::Rgb(255, 180, 120)).add_modifier(Modifier::BOLD)),
-                Span::styled("X only ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ E/Q ", Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
-                Span::styled("Y only ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ ←→ ", Style::default().fg(Color::Rgb(120, 220, 255)).add_modifier(Modifier::BOLD)),
-                Span::styled("shift ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ Z ", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
-                Span::styled("zero ", Style::default().fg(Color::Rgb(140, 140, 160))),
-                Span::styled("│ B ", Style::default().fg(Color::Rgb(140, 140, 160)).add_modifier(Modifier::BOLD)),
-                Span::styled("exit bump", Style::default().fg(Color::Rgb(140, 140, 160))),
-            ]);
+            // Blank separator
+            panel_lines.push(Line::from(Span::styled("", Style::default())));
 
-            let detail = Paragraph::new(vec![header_line, trim_line, controls_line])
+            // Controls summary (stacked for narrow panel)
+            panel_lines.push(Line::from(vec![
+                Span::styled(" ↑↓", Style::default().fg(Color::Rgb(255, 255, 100)).add_modifier(Modifier::BOLD)),
+                Span::styled(" X+Y ", Style::default().fg(Color::Rgb(140, 140, 160))),
+                Span::styled("W/S", Style::default().fg(Color::Rgb(255, 180, 120)).add_modifier(Modifier::BOLD)),
+                Span::styled(" X", Style::default().fg(Color::Rgb(140, 140, 160))),
+            ]));
+            panel_lines.push(Line::from(vec![
+                Span::styled(" E/Q", Style::default().fg(Color::Rgb(200, 120, 255)).add_modifier(Modifier::BOLD)),
+                Span::styled(" Y ", Style::default().fg(Color::Rgb(140, 140, 160))),
+                Span::styled("←→", Style::default().fg(Color::Rgb(120, 220, 255)).add_modifier(Modifier::BOLD)),
+                Span::styled(" shift", Style::default().fg(Color::Rgb(140, 140, 160))),
+            ]));
+            panel_lines.push(Line::from(vec![
+                Span::styled(" Z", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
+                Span::styled(" zero ", Style::default().fg(Color::Rgb(140, 140, 160))),
+                Span::styled("B", Style::default().fg(Color::Rgb(140, 140, 160)).add_modifier(Modifier::BOLD)),
+                Span::styled(" exit", Style::default().fg(Color::Rgb(140, 140, 160))),
+            ]));
+
+            let detail = Paragraph::new(panel_lines)
                 .block(Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(Color::Rgb(60, 180, 140)))
-                    .title(format!(" {}-Bump Control ", bump.size))
+                    .title(format!(" {}-Bump ", bump.size))
                     .title_style(Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)));
-            frame.render_widget(detail, chunks[4]);
+            frame.render_widget(detail, left_chunks[0]);
         } else {
-            // Normal magnet detail panel
-            // Line 1: Section header
-            let header_line = Line::from(vec![
+            // Normal magnet detail panel - vertical layout with magnets stacked
+            let mut panel_lines: Vec<Line> = Vec::new();
+
+            // Section header
+            panel_lines.push(Line::from(vec![
                 Span::styled(
-                    format!(" Section {}/{} ", sec + 1, NUM_SECTIONS),
+                    format!(" Sec {}/{}", sec + 1, NUM_SECTIONS),
                     Style::default().fg(Color::Rgb(200, 200, 220)).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("Selected: {} ({}/6) ", self.magnets[self.selected].mag_type.label(), elem + 1),
-                    Style::default().fg(self.magnets[self.selected].mag_type.color()).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                Span::styled("↑↓ adjust ", Style::default().fg(Color::Rgb(100, 100, 130))),
-                Span::styled("+/- step ", Style::default().fg(Color::Rgb(100, 100, 130))),
-            ]);
+            ]));
 
-            // Line 2: All element labels with powers
-            let mut element_spans: Vec<Span> = vec![Span::styled(" ", Style::default())];
+            // Blank separator
+            panel_lines.push(Line::from(Span::styled("", Style::default())));
+
+            // Each magnet on its own line with mini power bar
             for e in 0..MAGNETS_PER_SECTION {
                 let mag = &self.magnets[sec_base + e];
                 let is_sel = e == elem;
-                if e > 0 {
-                    element_spans.push(Span::styled(" → ", Style::default().fg(Color::Rgb(50, 50, 70))));
-                }
-                // Selector indicator
+                let bar_width = 8;
+                let power_norm = (mag.power.abs() / 0.5).min(1.0);
+                let filled = (power_norm * bar_width as f32) as usize;
+
+                let mut spans: Vec<Span> = Vec::new();
+                // Selection indicator
                 if is_sel {
-                    element_spans.push(Span::styled("▸", Style::default().fg(Color::Rgb(255, 255, 100))));
+                    spans.push(Span::styled(" ▸", Style::default().fg(Color::Rgb(255, 255, 100))));
+                } else {
+                    spans.push(Span::styled("  ", Style::default()));
                 }
-                // Label
-                element_spans.push(Span::styled(
-                    mag.mag_type.label(),
+                // Magnet label
+                spans.push(Span::styled(
+                    format!("{}", mag.mag_type.label()),
                     Style::default()
                         .fg(if is_sel { Color::Rgb(255, 255, 255) } else { mag.mag_type.color() })
                         .add_modifier(if is_sel { Modifier::BOLD } else { Modifier::empty() }),
                 ));
                 // Power value
-                element_spans.push(Span::styled(
-                    format!(":{:+.4}", mag.power),
+                spans.push(Span::styled(
+                    format!(" {:+.4} ", mag.power),
                     Style::default()
                         .fg(if is_sel { Color::Rgb(255, 220, 80) } else { Color::Rgb(120, 120, 150) })
                         .add_modifier(if is_sel { Modifier::BOLD } else { Modifier::empty() }),
                 ));
-            }
-            let elements_line = Line::from(element_spans);
-
-            // Line 3: Visual power bar for selected element
-            let mag = &self.magnets[self.selected];
-            let bar_width = 20;
-            let power_norm = (mag.power.abs() / 0.5).min(1.0);
-            let filled = (power_norm * bar_width as f32) as usize;
-            let mut bar_spans: Vec<Span> = vec![
-                Span::styled(" Power: ", Style::default().fg(Color::Rgb(100, 100, 130))),
-            ];
-            let bar_color = self.magnets[self.selected].mag_type.color();
-            for i in 0..bar_width {
-                if i < filled {
-                    bar_spans.push(Span::styled("█", Style::default().fg(bar_color)));
-                } else {
-                    bar_spans.push(Span::styled("░", Style::default().fg(Color::Rgb(35, 35, 50))));
+                // Mini power bar
+                let bar_color = mag.mag_type.color();
+                for i in 0..bar_width {
+                    if i < filled {
+                        spans.push(Span::styled("█", Style::default().fg(bar_color)));
+                    } else {
+                        spans.push(Span::styled("░", Style::default().fg(Color::Rgb(35, 35, 50))));
+                    }
                 }
-            }
-            bar_spans.push(Span::styled(
-                format!(" {:+.4} ", mag.power),
-                Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD),
-            ));
-            if mag.power < 0.0 {
-                bar_spans.push(Span::styled("(neg) ", Style::default().fg(Color::Rgb(255, 140, 100))));
-            }
-            let bar_line = Line::from(bar_spans);
 
-            let detail = Paragraph::new(vec![header_line, elements_line, bar_line])
+                panel_lines.push(Line::from(spans));
+            }
+
+            // Blank separator
+            panel_lines.push(Line::from(Span::styled("", Style::default())));
+
+            // Controls hint
+            panel_lines.push(Line::from(vec![
+                Span::styled(" ↑↓", Style::default().fg(Color::Rgb(255, 255, 100))),
+                Span::styled(" mag ", Style::default().fg(Color::Rgb(100, 100, 130))),
+                Span::styled("←→", Style::default().fg(Color::Rgb(255, 255, 100))),
+                Span::styled(" pow", Style::default().fg(Color::Rgb(100, 100, 130))),
+            ]));
+            panel_lines.push(Line::from(vec![
+                Span::styled(" []", Style::default().fg(Color::Rgb(255, 255, 100))),
+                Span::styled(" sec ", Style::default().fg(Color::Rgb(100, 100, 130))),
+                Span::styled("+/-", Style::default().fg(Color::Rgb(255, 255, 100))),
+                Span::styled(" step", Style::default().fg(Color::Rgb(100, 100, 130))),
+            ]));
+
+            let detail = Paragraph::new(panel_lines)
                 .block(Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(Color::Rgb(60, 100, 140)))
                     .title(" Magnet Control ")
                     .title_style(Style::default().fg(Color::Rgb(120, 200, 255))));
-            frame.render_widget(detail, chunks[4]);
+            frame.render_widget(detail, left_chunks[0]);
+        }
+
+        // Bullseye closed orbit plot (below magnet control)
+        {
+            let bull_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(80, 80, 120)))
+                .title(format!(" Orbit ({:+.1},{:+.1}) ", self.target_x, self.target_y))
+                .title_style(Style::default().fg(Color::Rgb(255, 200, 80)));
+            let bull_inner = bull_block.inner(left_chunks[1]);
+            frame.render_widget(bull_block, left_chunks[1]);
+
+            let bw = bull_inner.width as usize;
+            let bh = bull_inner.height as usize;
+            if bw > 2 && bh > 2 {
+                let plot_range = 20.0_f32; // ±20 range
+                let bcx = bw as f32 / 2.0;
+                let bcy = bh as f32 / 2.0;
+                let sx = bcx / plot_range;
+                let sy = bcy / plot_range;
+
+                let mut bgrid: Vec<Vec<(char, Style)>> =
+                    vec![vec![(' ', Style::default().bg(Color::Rgb(10, 10, 18))); bw]; bh];
+
+                // Draw faint crosshair axes through center
+                let cx_i = bcx as usize;
+                let cy_i = bcy as usize;
+                for x in 0..bw {
+                    if cy_i < bh {
+                        bgrid[cy_i][x] = ('─', Style::default().fg(Color::Rgb(25, 25, 40)).bg(Color::Rgb(10, 10, 18)));
+                    }
+                }
+                for y in 0..bh {
+                    if cx_i < bw {
+                        bgrid[y][cx_i] = ('│', Style::default().fg(Color::Rgb(25, 25, 40)).bg(Color::Rgb(10, 10, 18)));
+                    }
+                }
+                if cx_i < bw && cy_i < bh {
+                    bgrid[cy_i][cx_i] = ('┼', Style::default().fg(Color::Rgb(30, 30, 50)).bg(Color::Rgb(10, 10, 18)));
+                }
+
+                // Draw bullseye rings around target
+                let tx = (bcx + self.target_x * sx) as usize;
+                let ty = (bcy - self.target_y * sy) as usize;
+                // Outer ring (radius ~3 chars)
+                for angle_step in 0..24 {
+                    let a = (angle_step as f32 / 24.0) * std::f32::consts::PI * 2.0;
+                    let rx_r = 4.0_f32;
+                    let ry_r = 2.0_f32;
+                    let px = (tx as f32 + rx_r * a.cos()) as usize;
+                    let py = (ty as f32 + ry_r * a.sin()) as usize;
+                    if px < bw && py < bh && bgrid[py][px].0 == ' ' || (px < bw && py < bh && bgrid[py][px].0 == '─') || (px < bw && py < bh && bgrid[py][px].0 == '│') {
+                        bgrid[py][px] = ('·', Style::default().fg(Color::Rgb(60, 50, 30)).bg(Color::Rgb(10, 10, 18)));
+                    }
+                }
+
+                // Draw target marker
+                if tx < bw && ty < bh {
+                    bgrid[ty][tx] = ('◎', Style::default().fg(Color::Rgb(255, 200, 80)).bg(Color::Rgb(10, 10, 18)).add_modifier(Modifier::BOLD));
+                }
+
+                // Draw turn positions (older = dimmer)
+                let n = self.turn_positions.len();
+                for (i, &(px, py)) in self.turn_positions.iter().enumerate() {
+                    let dot_x = (bcx + px * sx) as usize;
+                    let dot_y = (bcy - py * sy) as usize;
+                    if dot_x < bw && dot_y < bh {
+                        let age = (n - 1 - i) as f32;
+                        let brightness = (1.0 - age / 12.0).max(0.3);
+                        let dist = ((px - self.target_x).powi(2) + (py - self.target_y).powi(2)).sqrt();
+                        let (ch, color) = if dist < 2.0 {
+                            ('●', Color::Rgb((80.0 * brightness) as u8, (255.0 * brightness) as u8, (80.0 * brightness) as u8))
+                        } else if dist < 8.0 {
+                            ('●', Color::Rgb((255.0 * brightness) as u8, (255.0 * brightness) as u8, (50.0 * brightness) as u8))
+                        } else {
+                            ('●', Color::Rgb((255.0 * brightness) as u8, (60.0 * brightness) as u8, (60.0 * brightness) as u8))
+                        };
+                        bgrid[dot_y][dot_x] = (ch, Style::default().fg(color).bg(Color::Rgb(10, 10, 18)));
+                    }
+                }
+
+                // Draw current beam position as bright marker (if running)
+                if self.beam_running && !self.beam_lost {
+                    let cur_x = (bcx + self.beam_position * sx) as usize;
+                    let cur_y = (bcy - self.beam_y_position * sy) as usize;
+                    if cur_x < bw && cur_y < bh {
+                        bgrid[cur_y][cur_x] = ('◆', Style::default().fg(Color::Rgb(100, 255, 255)).bg(Color::Rgb(10, 10, 18)).add_modifier(Modifier::BOLD));
+                    }
+                }
+
+                let bull_lines: Vec<Line> = bgrid.into_iter()
+                    .map(|row| {
+                        Line::from(row.into_iter()
+                            .map(|(ch, s)| Span::styled(String::from(ch), s))
+                            .collect::<Vec<_>>())
+                    })
+                    .collect();
+                frame.render_widget(Paragraph::new(bull_lines), bull_inner);
+            }
         }
 
         // Help bar
@@ -1423,13 +1569,16 @@ impl Game for BeamGame {
                 Span::styled(" ✗ BEAM LOST! ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                 Span::styled("Adjust magnets and press ENTER to retry, Esc for menu", Style::default().fg(Color::Gray)),
             ]));
-            frame.render_widget(msg, chunks[5]);
+            frame.render_widget(msg, chunks[4]);
         } else if self.beam_completed {
             let msg = Paragraph::new(Line::from(vec![
-                Span::styled(" ✓ BEAM STABLE! 10 turns completed! ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                format!(" ✓ BEAM STABLE! {} turns! Score: {:.4} ", GOAL_TURNS, self.magnets.iter().map(|m| m.power.abs()).sum::<f32>()),
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ),
                 Span::styled("Press ENTER to play again", Style::default().fg(Color::Gray)),
             ]));
-            frame.render_widget(msg, chunks[5]);
+            frame.render_widget(msg, chunks[4]);
         } else if self.bump.is_some() {
             // Bump mode help bar
             let help = Paragraph::new(Line::from(vec![
@@ -1437,15 +1586,15 @@ impl Game for BeamGame {
                 Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 0-9 Ramp │ Z Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
-            frame.render_widget(help, chunks[5]);
+            frame.render_widget(help, chunks[4]);
         } else {
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(if self.beam_running { " SPACE: running " } else { " SPACE: start " },
                     Style::default().fg(if self.beam_running { Color::Green } else { Color::Yellow })),
-                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 0-9 Ramp │ B Bump │ C Copy │ +/- Step │ Z Zero │ D Diff │ P │ Esc",
+                Span::styled("│ ↑↓ Mag │ ←→ Pow │ [] Sec │ 0-9 Ramp │ B Bump │ C Copy │ +/- Step │ Z Zero │ D Diff │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
-            frame.render_widget(help, chunks[5]);
+            frame.render_widget(help, chunks[4]);
         }
     }
 
@@ -1459,8 +1608,12 @@ impl Game for BeamGame {
         let bump = self.bump.clone();
         let ramp_powers = self.ramp_powers.clone();
         let selected_ramp = self.selected_ramp;
+        let target_x = self.target_x;
+        let target_y = self.target_y;
         *self = BeamGame::new();
         self.best_turns = best;
+        self.target_x = target_x;
+        self.target_y = target_y;
         self.difficulty = diff;
         self.restrictions = restrictions;
         self.magnets = magnets;

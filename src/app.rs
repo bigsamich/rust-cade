@@ -52,6 +52,7 @@ impl Tab {
 pub struct App {
     pub should_quit: bool,
     pub current_tab: Tab,
+    pub selected_game: usize, // 0-5 for home screen game selection
     pub frogger: Frogger,
     pub breakout: Breakout,
     pub dino_run: DinoRun,
@@ -65,6 +66,7 @@ impl App {
         Self {
             should_quit: false,
             current_tab: Tab::Home,
+            selected_game: 0,
             frogger: Frogger::new(),
             breakout: Breakout::new(),
             dino_run: DinoRun::new(),
@@ -122,31 +124,43 @@ impl App {
             _ => {}
         }
 
-        // Home screen number key shortcuts
+        // Home screen shortcuts and navigation
         if matches!(self.current_tab, Tab::Home) && key.modifiers.is_empty() {
             match key.code {
-                KeyCode::Char('1') => {
-                    self.current_tab = Tab::Frogger;
+                KeyCode::Char('1') => { self.current_tab = Tab::Frogger; return; }
+                KeyCode::Char('2') => { self.current_tab = Tab::Breakout; return; }
+                KeyCode::Char('3') => { self.current_tab = Tab::DinoRun; return; }
+                KeyCode::Char('4') => { self.current_tab = Tab::Pinball; return; }
+                KeyCode::Char('5') => { self.current_tab = Tab::JezzBall; return; }
+                KeyCode::Char('6') => { self.current_tab = Tab::Beam; return; }
+                // Arrow key navigation for game tile selection (2 rows x 3 cols)
+                KeyCode::Right => {
+                    self.selected_game = (self.selected_game + 1) % 6;
                     return;
                 }
-                KeyCode::Char('2') => {
-                    self.current_tab = Tab::Breakout;
+                KeyCode::Left => {
+                    self.selected_game = (self.selected_game + 5) % 6;
                     return;
                 }
-                KeyCode::Char('3') => {
-                    self.current_tab = Tab::DinoRun;
+                KeyCode::Down => {
+                    self.selected_game = (self.selected_game + 3) % 6;
                     return;
                 }
-                KeyCode::Char('4') => {
-                    self.current_tab = Tab::Pinball;
+                KeyCode::Up => {
+                    self.selected_game = (self.selected_game + 3) % 6;
                     return;
                 }
-                KeyCode::Char('5') => {
-                    self.current_tab = Tab::JezzBall;
-                    return;
-                }
-                KeyCode::Char('6') => {
-                    self.current_tab = Tab::Beam;
+                // Enter launches the selected game
+                KeyCode::Enter => {
+                    self.current_tab = match self.selected_game {
+                        0 => Tab::Frogger,
+                        1 => Tab::Breakout,
+                        2 => Tab::DinoRun,
+                        3 => Tab::Pinball,
+                        4 => Tab::JezzBall,
+                        5 => Tab::Beam,
+                        _ => Tab::Home,
+                    };
                     return;
                 }
                 _ => {}

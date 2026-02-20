@@ -18,7 +18,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     tabs::render_tabs(frame, app, chunks[0]);
 
     match app.current_tab {
-        Tab::Home => home::render_home(frame, chunks[1]),
+        Tab::Home => home::render_home(frame, chunks[1], app.selected_game),
         Tab::Frogger => app.frogger.render(frame, chunks[1]),
         Tab::Breakout => app.breakout.render(frame, chunks[1]),
         Tab::DinoRun => app.dino_run.render(frame, chunks[1]),
