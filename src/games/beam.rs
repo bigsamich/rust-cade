@@ -167,7 +167,7 @@ const MAGNETS_PER_SECTION: usize = 6;
 const TOTAL_MAGNETS: usize = NUM_SECTIONS * MAGNETS_PER_SECTION;
 const GOAL_TURNS: u32 = 10;
 const MAX_HISTORY: usize = 60;
-const RAMP_TURNS: [u32; 4] = [0, 2, 5, 8];
+const NUM_RAMPS: usize = 9;
 const MAX_RAMP_DELTA: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -247,9 +247,9 @@ pub struct BeamGame {
     message: Option<(String, u32, Color)>, // (text, ticks_remaining, color)
     // Bump mode: closed orbit bump using N consecutive trim magnets
     bump: Option<BumpConfig>,
-    // Power supply ramp: 4 settings per magnet at turns 0, 2, 5, 8
-    ramp_powers: Vec<[f32; 4]>,  // Per-magnet power at each ramp point
-    selected_ramp: usize,         // Which ramp point is being edited (0-3)
+    // Power supply ramp: 9 settings per magnet, one per turn (keys 1-9)
+    ramp_powers: Vec<[f32; 9]>,  // Per-magnet power at each ramp point
+    selected_ramp: usize,         // Which ramp point is being edited (0-8)
 }
 
 impl BeamGame {
@@ -284,9 +284,9 @@ impl BeamGame {
             Restriction { section: restriction_sections[3], axis: 'y', positive_blocked: rng.gen_bool(0.5) },
         ];
 
-        // Initialize ramp powers: all 4 ramp points start with same initial power
-        let ramp_powers: Vec<[f32; 4]> = magnets.iter()
-            .map(|m| [m.power; 4])
+        // Initialize ramp powers: all 9 ramp points start with same initial power
+        let ramp_powers: Vec<[f32; 9]> = magnets.iter()
+            .map(|m| [m.power; 9])
             .collect();
 
         Self {
@@ -474,7 +474,7 @@ impl BeamGame {
         let powers: Vec<f32> = (0..MAGNETS_PER_SECTION)
             .map(|e| self.magnets[src_base + e].power)
             .collect();
-        let ramps: Vec<[f32; 4]> = (0..MAGNETS_PER_SECTION)
+        let ramps: Vec<[f32; 9]> = (0..MAGNETS_PER_SECTION)
             .map(|e| self.ramp_powers[src_base + e])
             .collect();
         for sec in 0..NUM_SECTIONS {
@@ -522,24 +522,11 @@ impl BeamGame {
         ((x_score + y_score) * 0.5) * 100.0
     }
 
-    /// Get the interpolated power for a magnet at a given turn number.
-    /// Linearly interpolates between ramp points at turns 0, 2, 5, 8.
-    /// After turn 8, holds the last ramp value.
-    fn interpolated_power(&self, magnet_idx: usize, turn: u32) -> f32 {
-        let ramp = &self.ramp_powers[magnet_idx];
-        if turn <= RAMP_TURNS[0] {
-            return ramp[0];
-        }
-        if turn >= RAMP_TURNS[3] {
-            return ramp[3];
-        }
-        for i in 0..3 {
-            if turn >= RAMP_TURNS[i] && turn < RAMP_TURNS[i + 1] {
-                let t = (turn - RAMP_TURNS[i]) as f32 / (RAMP_TURNS[i + 1] - RAMP_TURNS[i]) as f32;
-                return ramp[i] + t * (ramp[i + 1] - ramp[i]);
-            }
-        }
-        ramp[3]
+    /// Get the ramp power for a magnet at a given turn number.
+    /// Each turn 0-8 maps directly to ramp points 0-8. Turn 9+ uses ramp 8.
+    fn ramp_power_for_turn(&self, magnet_idx: usize, turn: u32) -> f32 {
+        let idx = (turn as usize).min(NUM_RAMPS - 1);
+        self.ramp_powers[magnet_idx][idx]
     }
 
     /// Clamp a ramp value so it's within ±MAX_RAMP_DELTA of its neighbors.
@@ -549,7 +536,7 @@ impl BeamGame {
             let prev = self.ramp_powers[magnet_idx][ramp_idx - 1];
             v = v.clamp(prev - MAX_RAMP_DELTA, prev + MAX_RAMP_DELTA);
         }
-        if ramp_idx < 3 {
+        if ramp_idx < NUM_RAMPS - 1 {
             let next = self.ramp_powers[magnet_idx][ramp_idx + 1];
             v = v.clamp(next - MAX_RAMP_DELTA, next + MAX_RAMP_DELTA);
         }
@@ -564,11 +551,11 @@ impl BeamGame {
         }
     }
 
-    /// Update all magnets' effective power from ramp interpolation based on current turn.
+    /// Update all magnets' effective power from ramp based on current turn.
     fn sync_interpolated_powers(&mut self) {
         let turn = self.turns_completed;
         for i in 0..TOTAL_MAGNETS {
-            self.magnets[i].power = self.interpolated_power(i, turn);
+            self.magnets[i].power = self.ramp_power_for_turn(i, turn);
         }
     }
 
@@ -821,36 +808,13 @@ impl Game for BeamGame {
                             self.magnets[sel].power = clamped;
                         }
                     }
-                    // Ramp point selection: keys 1-4 select which ramp point to edit
-                    KeyCode::Char('1') => {
-                        self.selected_ramp = 0;
+                    // Ramp point selection: keys 1-9 select which ramp point to edit
+                    KeyCode::Char(c @ '1'..='9') => {
+                        let ramp_idx = (c as usize) - ('1' as usize);
+                        self.selected_ramp = ramp_idx;
                         self.sync_display_from_ramp();
                         self.message = Some((
-                            format!("Ramp 1 (Turn {})", RAMP_TURNS[0]),
-                            30, Color::Rgb(120, 200, 255),
-                        ));
-                    }
-                    KeyCode::Char('2') => {
-                        self.selected_ramp = 1;
-                        self.sync_display_from_ramp();
-                        self.message = Some((
-                            format!("Ramp 2 (Turn {})", RAMP_TURNS[1]),
-                            30, Color::Rgb(120, 200, 255),
-                        ));
-                    }
-                    KeyCode::Char('3') => {
-                        self.selected_ramp = 2;
-                        self.sync_display_from_ramp();
-                        self.message = Some((
-                            format!("Ramp 3 (Turn {})", RAMP_TURNS[2]),
-                            30, Color::Rgb(120, 200, 255),
-                        ));
-                    }
-                    KeyCode::Char('4') => {
-                        self.selected_ramp = 3;
-                        self.sync_display_from_ramp();
-                        self.message = Some((
-                            format!("Ramp 4 (Turn {})", RAMP_TURNS[3]),
+                            format!("Ramp {} (Turn {})", ramp_idx + 1, ramp_idx),
                             30, Color::Rgb(120, 200, 255),
                         ));
                     }
@@ -942,7 +906,7 @@ impl Game for BeamGame {
                 Style::default().fg(self.difficulty.color()).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("Ramp:{}/4(T{}) ", self.selected_ramp + 1, RAMP_TURNS[self.selected_ramp]),
+                format!("Ramp:{}/9(T{}) ", self.selected_ramp + 1, self.selected_ramp),
                 Style::default().fg(Color::Rgb(180, 140, 255)).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
@@ -1470,7 +1434,7 @@ impl Game for BeamGame {
             // Bump mode help bar
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(" BUMP ", Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)),
-                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 1-4 Ramp │ 0 Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
+                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 1-9 Ramp │ 0 Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
@@ -1478,7 +1442,7 @@ impl Game for BeamGame {
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(if self.beam_running { " SPACE: running " } else { " SPACE: start " },
                     Style::default().fg(if self.beam_running { Color::Green } else { Color::Yellow })),
-                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 1-4 Ramp │ B Bump │ C Copy │ +/- Step │ 0 Zero │ D Diff │ P │ Esc",
+                Span::styled("│ ←→ Mag │ ↑↓ Pow │ [] Sec │ 1-9 Ramp │ B Bump │ C Copy │ +/- Step │ 0 Zero │ D Diff │ P │ Esc",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[5]);
