@@ -1,1 +1,20 @@
-/target
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo lock file (optional – remove this line if this is a binary crate)
+# Cargo.lock
+
+# Core dumps
+*.core
+
+# IDE / editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
