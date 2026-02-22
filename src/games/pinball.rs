@@ -4,10 +4,10 @@ use ratatui::widgets::*;
 
 use crate::games::Game;
 
-const GRAVITY: f32 = 0.04;
-const BALL_DAMPING: f32 = 0.98;
-const FLIPPER_FORCE: f32 = -1.8;
-const BUMPER_FORCE: f32 = 1.2;
+const GRAVITY: f32 = 0.03;
+const BALL_DAMPING: f32 = 0.99;
+const FLIPPER_FORCE: f32 = -2.2;
+const BUMPER_FORCE: f32 = 1.0;
 
 #[derive(Clone)]
 struct Bumper {
@@ -116,10 +116,17 @@ impl Pinball {
         self.rails.push(Rail { x1: 2.0, y1: fh * 0.15, x2: 6.0, y2: fh * 0.05 });
         // Right rail  
         self.rails.push(Rail { x1: fw - 3.0, y1: fh * 0.15, x2: fw - 7.0, y2: fh * 0.05 });
-        // Left guide to flippers
-        self.rails.push(Rail { x1: 3.0, y1: fh * 0.70, x2: 8.0, y2: fh * 0.78 });
+        // Left guide to flippers (steeper inward angle to funnel ball)
+        self.rails.push(Rail { x1: 3.0, y1: fh * 0.65, x2: 7.0, y2: fh * 0.80 });
         // Right guide to flippers
-        self.rails.push(Rail { x1: fw - 4.0, y1: fh * 0.70, x2: fw - 9.0, y2: fh * 0.78 });
+        self.rails.push(Rail { x1: fw - 4.0, y1: fh * 0.65, x2: fw - 8.0, y2: fh * 0.80 });
+        // Bottom side walls - prevent ball from draining along the sides
+        self.rails.push(Rail { x1: 2.0, y1: fh * 0.80, x2: 5.0, y2: fh * 0.85 });
+        self.rails.push(Rail { x1: fw - 3.0, y1: fh * 0.80, x2: fw - 6.0, y2: fh * 0.85 });
+
+        // Slingshot bumpers near flippers (bounce ball back into play)
+        self.bumpers.push(Bumper { x: 6.0, y: fh * 0.72, radius: 1.2, points: 25, hit_timer: 0 });
+        self.bumpers.push(Bumper { x: fw - 7.0, y: fh * 0.72, radius: 1.2, points: 25, hit_timer: 0 });
     }
 
     fn flipper_left_y(&self) -> f32 {
@@ -131,11 +138,11 @@ impl Pinball {
     }
 
     fn flipper_left_x(&self) -> f32 {
-        self.field_width * 0.20
+        self.field_width * 0.22
     }
 
     fn flipper_right_x(&self) -> f32 {
-        self.field_width * 0.55
+        self.field_width * 0.48
     }
 
     fn update_physics(&mut self) {
@@ -566,27 +573,26 @@ impl Game for Pinball {
                 match key.code {
                     KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('A') => {
                         self.left_flipper = true;
-                        self.flipper_timer_l = 6;
+                        self.flipper_timer_l = 10;
                     }
                     KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('D') => {
                         self.right_flipper = true;
-                        self.flipper_timer_r = 6;
+                        self.flipper_timer_r = 10;
                     }
                     KeyCode::Char(' ') | KeyCode::Down => {
                         if !self.launched {
-                            // Launch ball up the right lane
+                            // Always launch ball strongly to the very top
                             self.launched = true;
-                            let power = self.launch_power.max(0.4);
-                            self.ball_dy = -power * 3.5;
-                            self.ball_dx = -1.2; // Strong leftward push into play area
+                            self.ball_dy = -3.8;
+                            self.ball_dx = -0.8; // Leftward push into play area
                             self.launch_power = 0.0;
                             self.charging = false;
                         } else {
                             // Both flippers
                             self.left_flipper = true;
                             self.right_flipper = true;
-                            self.flipper_timer_l = 6;
-                            self.flipper_timer_r = 6;
+                            self.flipper_timer_l = 10;
+                            self.flipper_timer_r = 10;
                         }
                     }
                     KeyCode::Up => {
