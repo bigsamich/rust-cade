@@ -6,6 +6,8 @@ A TUI-based arcade game suite built with [Ratatui](https://github.com/ratatui/ra
 ![Rust](https://img.shields.io/badge/rust-2021_edition-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![Main Menu](main-menu.png)
+
 ## 🎮 Games
 
 | Game | Description |
