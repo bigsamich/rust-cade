@@ -10,12 +10,12 @@ A TUI-based arcade game suite built with [Ratatui](https://github.com/ratatui/ra
 
 | Game | Description |
 |------|-------------|
-| **Beam** | Particle beam simulation — tune magnets across 24 ring sections to keep a beam stable for 5 turns. Features bump mode, power supply ramps, and difficulty settings. |
+| **Frogger** | Navigate traffic and ride logs across 13 lanes to reach the goal pads. |
 | **Breakout** | Classic brick-breaking action with paddle, ball, colored bricks, lives, and increasing speed. |
 | **Dino Run** | Chrome-style endless runner — jump and duck to dodge cacti and birds as speed ramps up. |
-| **Frogger** | Navigate traffic and ride logs across 13 lanes to reach the goal pads. |
-| **JezzBall** | Launch growing walls to partition space and trap bouncing balls. Progress through levels with more balls. |
 | **Pinball** | Terminal pinball with flippers, bumpers, spinners, and a multiball system. |
+| **JezzBall** | Launch growing walls to partition space and trap bouncing balls. Progress through levels with more balls. |
+| **Beam** | Particle beam simulation — tune magnets across 24 ring sections to keep a beam stable for 5 turns. Features bump mode, power supply ramps, and difficulty settings. |
 
 ## 📦 Installation
 
@@ -43,18 +43,100 @@ Launch the arcade:
 rustcade
 ```
 
-Use the tab-based menu to browse and select a game.
+Use the tab-based menu to browse and select a game, or press a number key to quick-launch.
 
-### Global Controls
+## 🎛️ Controls
+
+### Global
 
 | Key | Action |
 |-----|--------|
 | `Tab` / `Shift+Tab` | Switch between game tabs |
 | `Enter` | Start selected game |
-| `Esc` | Return to menu / Quit |
-| `q` | Quit |
+| `1`–`6` | Quick-launch a game by number |
+| `←` `→` `↑` `↓` | Navigate game tile grid on home screen |
+| `H` | Toggle high scores display |
+| `Esc` | Return to menu from any game |
+| `Q` | Quit (from home screen) |
+| `Ctrl+C` | Force quit |
 
-Each game has its own controls displayed in-game.
+### High Score Name Entry
+
+| Key | Action |
+|-----|--------|
+| Any letter/number | Type character (uppercase, max 9 chars) |
+| `Backspace` | Delete last character |
+| `Enter` | Submit name |
+| `Esc` | Cancel (submits as "???") |
+
+### Common In-Game Controls
+
+Every game shares these keys:
+
+| Key | Action |
+|-----|--------|
+| `R` | Reset / restart |
+| `P` | Pause / unpause |
+| `Enter` or `Space` | Restart when game over |
+
+---
+
+### Frogger
+
+| Key | Action |
+|-----|--------|
+| `↑` | Move frog up (toward goal, +10 pts) |
+| `↓` | Move frog down |
+| `←` | Move frog left |
+| `→` | Move frog right |
+
+### Breakout
+
+| Key | Action |
+|-----|--------|
+| `←` | Move paddle left |
+| `→` | Move paddle right |
+| `Space` / `↑` | Launch ball |
+
+### Dino Run
+
+| Key | Action |
+|-----|--------|
+| `Space` / `↑` / `Enter` | Start game / Jump |
+| `↓` | Duck (on ground) / Fast fall (in air) |
+
+### Pinball
+
+| Key | Action |
+|-----|--------|
+| `←` / `A` | Left flipper |
+| `→` / `D` | Right flipper |
+| `Space` / `↓` | Launch ball (plunger) |
+| `T` | Tilt |
+
+### JezzBall
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓` `←` `→` | Move cursor |
+| `Space` / `Enter` | Place wall |
+| `Tab` | Toggle wall direction (horizontal / vertical) |
+| `Enter` / `Space` (level won) | Advance to next level |
+
+### Beam
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Select magnet (or adjust bump trims in bump mode) |
+| `←` / `→` | Adjust magnet power (or shift bump section in bump mode) |
+| `]` / `[` | Jump to next / previous section |
+| `+` / `=` | Double power step size (max 1.0) |
+| `-` / `_` | Halve power step size (min 0.001) |
+| `C` | Copy current section settings to all sections |
+| `Z` | Zero selected magnet ramp value |
+| `X` | Zero all ramp values in current section |
+| `B` | Toggle bump mode |
+| `Space` | Start beam |
 
 ## 🏗️ Project Structure
 
@@ -63,6 +145,7 @@ src/
 ├── main.rs          # Terminal setup & main loop
 ├── app.rs           # Application state & input routing
 ├── event.rs         # Async key/tick event handler (~30 FPS)
+├── scores.rs        # High score persistence
 ├── ui/
 │   ├── mod.rs       # Root UI renderer
 │   ├── home.rs      # Home screen
@@ -85,77 +168,45 @@ src/
 
 ## 🔀 Cross Compiling
 
-Rust-cade can be cross-compiled for different platforms using Rust's built-in target support.
+Rust-cade can be cross-compiled for different platforms using [`cross`](https://github.com/cross-rs/cross), which handles toolchains and system libraries automatically via pre-configured Docker containers.
 
-### Prerequisites
-
-Install the desired target toolchain:
+### Install cross
 
 ```bash
-rustup target add <target-triple>
+cargo install cross
 ```
 
-### Common Targets
-
-| Platform | Target Triple | Notes |
-|----------|---------------|-------|
-| Linux (x86_64) | `x86_64-unknown-linux-gnu` | Default on most Linux systems |
-| Linux (ARM64) | `aarch64-unknown-linux-gnu` | Raspberry Pi 4, ARM servers |
-| Linux (ARMv7) | `armv7-unknown-linux-gnueabihf` | Raspberry Pi 2/3, older ARM boards |
-| macOS (Apple Silicon) | `aarch64-apple-darwin` | M1/M2/M3 Macs |
-| macOS (Intel) | `x86_64-apple-darwin` | Intel Macs |
-| Windows (x86_64) | `x86_64-pc-windows-gnu` | Windows via MinGW |
-| Windows (MSVC) | `x86_64-pc-windows-msvc` | Windows via MSVC (requires Windows SDK) |
-
-### Building for a Target
+### Build for a target
 
 ```bash
-cargo build --release --target <target-triple>
+cross build --release --target <target-triple>
 ```
 
-For example, to build for ARM64 Linux:
+### Examples
 
 ```bash
-cargo build --release --target aarch64-unknown-linux-gnu
+# Linux ARM64 (Raspberry Pi 4, ARM servers)
+cross build --release --target aarch64-unknown-linux-gnu
+
+# Linux ARMv7 (Raspberry Pi 2/3, older ARM boards)
+cross build --release --target armv7-unknown-linux-gnueabihf
+
+# Windows (x86_64 via MinGW)
+cross build --release --target x86_64-pc-windows-gnu
+
+# macOS Apple Silicon
+cross build --release --target aarch64-apple-darwin
+
+# macOS Intel
+cross build --release --target x86_64-apple-darwin
 ```
 
 The binary will be at `target/<target-triple>/release/rustcade`.
-
-### Using `cross`
-
-For targets that require a different linker or system libraries, [`cross`](https://github.com/cross-rs/cross) simplifies the process by using pre-configured Docker containers:
-
-```bash
-# Install cross
-cargo install cross
-
-# Build for any supported target
-cross build --release --target aarch64-unknown-linux-gnu
-cross build --release --target armv7-unknown-linux-gnueabihf
-cross build --release --target x86_64-pc-windows-gnu
-```
-
-### Linux Cross-Compile Without Docker
-
-If you prefer not to use Docker, install the appropriate cross-compiler toolchain:
-
-```bash
-# For ARM64
-sudo apt install gcc-aarch64-linux-gnu
-export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-cargo build --release --target aarch64-unknown-linux-gnu
-
-# For ARMv7
-sudo apt install gcc-arm-linux-gnueabihf
-export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
-cargo build --release --target armv7-unknown-linux-gnueabihf
-```
 
 ### Tips
 
 - Rust-cade is a pure terminal application with no native GUI dependencies, making it straightforward to cross-compile.
 - All dependencies (`ratatui`, `crossterm`, `rand`) are pure Rust, so no C library cross-compilation is needed.
-- You can list all installed targets with `rustup target list --installed`.
 - You can list all available targets with `rustup target list`.
 
 ## 🤝 Contributing
