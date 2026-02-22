@@ -2,7 +2,7 @@
 
 A TUI-based arcade game suite built with [Ratatui](https://github.com/ratatui/ratatui). Play classic arcade games right in your terminal!
 
-![Version](https://img.shields.io/badge/version-0.9.2-blue)
+![Version](https://img.shields.io/badge/version-0.10.1-blue)
 ![Rust](https://img.shields.io/badge/rust-2021_edition-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 

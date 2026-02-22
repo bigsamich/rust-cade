@@ -1,6 +1,6 @@
 [package]
 name = "rustcade"
-version = "0.9.2"
+version = "0.10.1"
 edition = "2021"
 description = "A TUI-based arcade game suite built with ratatui"
 
