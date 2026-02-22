@@ -1,6 +1,8 @@
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
+use crate::scores::{HighScores, GAME_NAMES};
+
 const BANNER: &str = r#"
  ╔═══════════════════════════════════════════════════════════════════╗
  ║  ██████╗ ██╗   ██╗███████╗████████╗ ██████╗ █████╗ ██████╗ ███████╗ ║
@@ -254,7 +256,7 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
     }
 }
 
-pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize) {
+pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_high_scores: bool, high_scores: &HighScores) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -406,8 +408,101 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize) {
     // Footer
     let footer = Paragraph::new(Line::from(vec![
         Span::styled("  🦀 ", Style::default().fg(Color::Rgb(255, 100, 50))),
-        Span::styled("v0.9.1", Style::default().fg(Color::Rgb(80, 80, 100))),
+        Span::styled("v0.9.2", Style::default().fg(Color::Rgb(80, 80, 100))),
+        Span::styled("  │  ", Style::default().fg(Color::Rgb(40, 40, 60))),
+        Span::styled("H", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
+        Span::styled(" High Scores", Style::default().fg(Color::Rgb(100, 100, 130))),
     ]))
     .alignment(Alignment::Center);
     frame.render_widget(footer, chunks[4]);
+
+    // High scores overlay
+    if show_high_scores {
+        render_high_scores_overlay(frame, area, high_scores);
+    }
+}
+
+fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighScores) {
+    // Center overlay
+    let overlay_w = 50u16.min(area.width.saturating_sub(4));
+    let overlay_h = 22u16.min(area.height.saturating_sub(4));
+    let x = area.x + (area.width.saturating_sub(overlay_w)) / 2;
+    let y = area.y + (area.height.saturating_sub(overlay_h)) / 2;
+    let overlay_area = Rect::new(x, y, overlay_w, overlay_h);
+
+    // Clear background
+    frame.render_widget(Clear, overlay_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(Color::Rgb(255, 200, 80)))
+        .title(" 🏆 High Scores ")
+        .title_style(Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD))
+        .style(Style::default().bg(Color::Rgb(15, 15, 25)));
+    let inner = block.inner(overlay_area);
+    frame.render_widget(block, overlay_area);
+
+    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "⚛"];
+    let colors = [
+        Color::Rgb(80, 220, 80),
+        Color::Rgb(220, 80, 80),
+        Color::Rgb(200, 120, 255),
+        Color::Rgb(255, 200, 80),
+        Color::Rgb(100, 180, 255),
+        Color::Rgb(120, 200, 255),
+    ];
+    let medal_colors = [
+        Color::Rgb(255, 215, 0),   // Gold
+        Color::Rgb(192, 192, 192), // Silver
+        Color::Rgb(205, 127, 50),  // Bronze
+    ];
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+
+    for game_idx in 0..6 {
+        let scores = high_scores.top_scores(game_idx);
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {} ", icons[game_idx]), Style::default()),
+            Span::styled(
+                GAME_NAMES[game_idx],
+                Style::default().fg(colors[game_idx]).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        let has_any = scores.iter().any(|&s| s > 0);
+        if has_any {
+            for rank in 0..3 {
+                if scores[rank] > 0 {
+                    let medal = match rank {
+                        0 => "🥇",
+                        1 => "🥈",
+                        _ => "🥉",
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled(format!("    {} ", medal), Style::default()),
+                        Span::styled(
+                            format!("{}", scores[rank]),
+                            Style::default().fg(medal_colors[rank]).add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+            }
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled("    No scores yet", Style::default().fg(Color::Rgb(60, 60, 80))),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Press ", Style::default().fg(Color::Rgb(80, 80, 100))),
+        Span::styled("H", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
+        Span::styled(" to close", Style::default().fg(Color::Rgb(80, 80, 100))),
+    ]));
+
+    let p = Paragraph::new(lines).style(Style::default().bg(Color::Rgb(15, 15, 25)));
+    frame.render_widget(p, inner);
 }

@@ -13,4 +13,6 @@ pub trait Game {
     fn handle_input(&mut self, key: KeyEvent);
     fn render(&mut self, frame: &mut Frame, area: Rect);
     fn reset(&mut self);
+    fn get_score(&self) -> u32;
+    fn is_game_over(&self) -> bool;
 }

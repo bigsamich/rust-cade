@@ -7,6 +7,7 @@ use crate::games::frogger::Frogger;
 use crate::games::jezzball::JezzBall;
 use crate::games::pinball::Pinball;
 use crate::games::Game;
+use crate::scores::HighScores;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Tab {
@@ -59,6 +60,8 @@ pub struct App {
     pub pinball: Pinball,
     pub jezzball: JezzBall,
     pub beam: BeamGame,
+    pub high_scores: HighScores,
+    pub show_high_scores: bool,
 }
 
 impl App {
@@ -73,6 +76,8 @@ impl App {
             pinball: Pinball::new(),
             jezzball: JezzBall::new(),
             beam: BeamGame::new(),
+            high_scores: HighScores::load(),
+            show_high_scores: false,
         }
     }
 
@@ -85,6 +90,28 @@ impl App {
             Tab::Pinball => self.pinball.update(),
             Tab::JezzBall => self.jezzball.update(),
             Tab::Beam => self.beam.update(),
+        }
+        // Auto-submit scores when games end
+        self.check_submit_scores();
+    }
+
+    fn check_submit_scores(&mut self) {
+        let games: [(usize, bool, u32); 6] = [
+            (0, self.frogger.is_game_over(), self.frogger.get_score()),
+            (1, self.breakout.is_game_over(), self.breakout.get_score()),
+            (2, self.dino_run.is_game_over(), self.dino_run.get_score()),
+            (3, self.pinball.is_game_over(), self.pinball.get_score()),
+            (4, self.jezzball.is_game_over(), self.jezzball.get_score()),
+            (5, self.beam.is_game_over(), self.beam.get_score()),
+        ];
+        for (idx, game_over, score) in games {
+            if game_over && score > 0 && !self.high_scores.was_submitted(idx) {
+                self.high_scores.submit(idx, score);
+                self.high_scores.mark_submitted(idx);
+            }
+            if !game_over && self.high_scores.was_submitted(idx) {
+                self.high_scores.clear_submitted(idx);
+            }
         }
     }
 
@@ -132,6 +159,10 @@ impl App {
                 KeyCode::Char('3') => { self.current_tab = Tab::DinoRun; return; }
                 KeyCode::Char('4') => { self.current_tab = Tab::Pinball; return; }
                 KeyCode::Char('5') => { self.current_tab = Tab::JezzBall; return; }
+                KeyCode::Char('h') | KeyCode::Char('H') => {
+                    self.show_high_scores = !self.show_high_scores;
+                    return;
+                }
                 KeyCode::Char('6') => { self.current_tab = Tab::Beam; return; }
                 // Arrow key navigation for game tile selection (2 rows x 3 cols)
                 KeyCode::Right => {

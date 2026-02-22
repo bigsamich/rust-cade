@@ -1,6 +1,7 @@
 mod app;
 mod event;
 mod games;
+mod scores;
 mod ui;
 
 use std::io;

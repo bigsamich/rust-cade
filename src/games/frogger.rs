@@ -506,6 +506,9 @@ impl Game for Frogger {
         }
     }
 
+    fn get_score(&self) -> u32 { self.score }
+    fn is_game_over(&self) -> bool { self.game_over }
+
     fn reset(&mut self) {
         let hs = self.high_score;
         let fw = self.field_width;

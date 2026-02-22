@@ -1610,6 +1610,12 @@ impl Game for BeamGame {
         }
     }
 
+    fn get_score(&self) -> u32 {
+        let score: f32 = self.magnets.iter().map(|m| m.power.abs()).sum();
+        (score * 100.0) as u32
+    }
+    fn is_game_over(&self) -> bool { self.beam_completed }
+
     fn reset(&mut self) {
         let best = self.best_turns;
         let diff = self.difficulty;
