@@ -946,11 +946,6 @@ impl Game for BeamGame {
                 Style::default().fg(self.difficulty.color()).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("Ramp{} ", self.selected_ramp),
-                Style::default().fg(Color::Rgb(180, 140, 255)).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
                 format!("Turns: {}/{} ", self.turns_completed, GOAL_TURNS),
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
@@ -961,23 +956,8 @@ impl Game for BeamGame {
             ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("X: {:+.1} ", self.beam_position),
-                Style::default().fg(if self.beam_position.abs() > 30.0 { Color::Red } else { Color::Green }),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("Y: {:+.1} ", self.beam_y_position),
-                Style::default().fg(if self.beam_y_position.abs() > 30.0 { Color::Red } else { Color::Rgb(120, 200, 255) }),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
                 format!("Size: {:.1}/{:.1} ", self.beam_size, self.beam_y_size),
                 Style::default().fg(if self.beam_size > 30.0 || self.beam_y_size > 30.0 { Color::Red } else { Color::Green }),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("Sec: {}/{} ", self.beam_section + 1, NUM_SECTIONS),
-                Style::default().fg(Color::Rgb(180, 180, 220)),
             ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -989,24 +969,17 @@ impl Game for BeamGame {
                 ).add_modifier(if self.beam_losses > 40.0 { Modifier::BOLD } else { Modifier::empty() }),
             ),
         ];
-        if self.beam_running && !self.pos_history.is_empty() {
-            status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
-            status_spans.push(Span::styled(
-                format!("Stability: {:.0}% ", stability),
-                Style::default().fg(stab_color).add_modifier(Modifier::BOLD),
-            ));
-        }
+        status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        status_spans.push(Span::styled(
+            format!("Stability: {:.0}% ", stability),
+            Style::default().fg(stab_color).add_modifier(Modifier::BOLD),
+        ));
         // Score: sum of absolute power across all magnets
         let score: f32 = self.magnets.iter().map(|m| m.power.abs()).sum();
         status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
         status_spans.push(Span::styled(
             format!("Score: {:.3} ", score),
             Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD),
-        ));
-        status_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
-        status_spans.push(Span::styled(
-            format!("Step: {:.3} ", self.adjust_speed),
-            Style::default().fg(Color::Rgb(140, 140, 160)),
         ));
         // Show flash message if active
         if let Some((ref msg, ticks, color)) = self.message {
@@ -1080,9 +1053,13 @@ impl Game for BeamGame {
         };
 
         let spans: Vec<Span> = bar_chars.iter().map(|(ch, s)| Span::styled(String::from(*ch), *s)).collect();
+        let x_color = if self.beam_position.abs() > 30.0 { Color::Red } else { Color::Green };
         bar_lines.push(Line::from(vec![
             Span::styled(" Beam X: ", Style::default().fg(Color::Rgb(100, 100, 140))),
-            Span::styled("Aperture", Style::default().fg(Color::Rgb(60, 60, 80))),
+            Span::styled(
+                format!("{:+.1}", self.beam_position),
+                Style::default().fg(x_color).add_modifier(Modifier::BOLD),
+            ),
         ]));
         bar_lines.push(Line::from(spans));
         frame.render_widget(Paragraph::new(bar_lines), chunks[1]);
@@ -1142,9 +1119,13 @@ impl Game for BeamGame {
         };
 
         let y_spans: Vec<Span> = y_bar_chars.iter().map(|(ch, s)| Span::styled(String::from(*ch), *s)).collect();
+        let y_color = if self.beam_y_position.abs() > 30.0 { Color::Red } else { Color::Rgb(120, 200, 255) };
         y_bar_lines.push(Line::from(vec![
             Span::styled(" Beam Y: ", Style::default().fg(Color::Rgb(140, 100, 160))),
-            Span::styled("Aperture", Style::default().fg(Color::Rgb(60, 60, 80))),
+            Span::styled(
+                format!("{:+.1}", self.beam_y_position),
+                Style::default().fg(y_color).add_modifier(Modifier::BOLD),
+            ),
         ]));
         y_bar_lines.push(Line::from(y_spans));
         frame.render_widget(Paragraph::new(y_bar_lines), chunks[2]);
@@ -1154,8 +1135,8 @@ impl Game for BeamGame {
         let ring_h = middle[1].height as usize;
         let cx = ring_w as f32 / 2.0;
         let cy = ring_h as f32 / 2.0;
-        let rx = (ring_w as f32 * 0.22).min(cx - 2.0);
-        let ry = (ring_h as f32 * 0.28).min(cy - 1.0);
+        let rx = (ring_w as f32 * 0.35).min(cx - 4.0);
+        let ry = (ring_h as f32 * 0.38).min(cy - 2.0);
 
         let mut grid: Vec<Vec<(char, Style)>> =
             vec![vec![(' ', Style::default()); ring_w]; ring_h];
@@ -1309,12 +1290,12 @@ impl Game for BeamGame {
             .collect();
         frame.render_widget(Paragraph::new(lines), middle[1]);
 
-        // Split left panel: magnet control on top, bullseye on bottom
+        // Split left panel: bullseye on top, magnet control on bottom
         let left_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Min(8),    // Bullseye closed orbit plot
                 Constraint::Length(14), // Magnet control panel
-                Constraint::Min(5),    // Bullseye closed orbit plot
             ])
             .split(middle[0]);
 
@@ -1401,16 +1382,24 @@ impl Game for BeamGame {
                     .border_style(Style::default().fg(Color::Rgb(60, 180, 140)))
                     .title(format!(" {}-Bump ", bump.size))
                     .title_style(Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)));
-            frame.render_widget(detail, left_chunks[0]);
+            frame.render_widget(detail, left_chunks[1]);
         } else {
             // Normal magnet detail panel - vertical layout with magnets stacked
             let mut panel_lines: Vec<Line> = Vec::new();
 
-            // Section header
+            // Section header with ramp and step size
             panel_lines.push(Line::from(vec![
                 Span::styled(
                     format!(" Sec {}/{}", sec + 1, NUM_SECTIONS),
                     Style::default().fg(Color::Rgb(200, 200, 220)).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" R{}", self.selected_ramp),
+                    Style::default().fg(Color::Rgb(180, 140, 255)).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" ⚡{:.3}", self.adjust_speed),
+                    Style::default().fg(Color::Rgb(140, 140, 160)),
                 ),
             ]));
 
@@ -1483,10 +1472,10 @@ impl Game for BeamGame {
                     .border_style(Style::default().fg(Color::Rgb(60, 100, 140)))
                     .title(" Magnet Control ")
                     .title_style(Style::default().fg(Color::Rgb(120, 200, 255))));
-            frame.render_widget(detail, left_chunks[0]);
+            frame.render_widget(detail, left_chunks[1]);
         }
 
-        // Bullseye closed orbit plot (below magnet control)
+        // Bullseye closed orbit plot (above magnet control)
         {
             let bull_block = Block::default()
                 .borders(Borders::ALL)
@@ -1494,8 +1483,8 @@ impl Game for BeamGame {
                 .border_style(Style::default().fg(Color::Rgb(80, 80, 120)))
                 .title(format!(" Orbit ({:+.1},{:+.1}) ", self.target_x, self.target_y))
                 .title_style(Style::default().fg(Color::Rgb(255, 200, 80)));
-            let bull_inner = bull_block.inner(left_chunks[1]);
-            frame.render_widget(bull_block, left_chunks[1]);
+            let bull_inner = bull_block.inner(left_chunks[0]);
+            frame.render_widget(bull_block, left_chunks[0]);
 
             let bw = bull_inner.width as usize;
             let bh = bull_inner.height as usize;
