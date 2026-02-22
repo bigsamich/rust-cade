@@ -9,6 +9,8 @@ use crate::games::pinball::Pinball;
 use crate::games::Game;
 use crate::scores::HighScores;
 
+const MAX_NAME_LEN: usize = 9;
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Tab {
     Home,
@@ -48,6 +50,7 @@ impl Tab {
             Tab::Beam => 6,
         }
     }
+
 }
 
 pub struct App {
@@ -62,6 +65,11 @@ pub struct App {
     pub beam: BeamGame,
     pub high_scores: HighScores,
     pub show_high_scores: bool,
+    // Name entry state
+    pub entering_name: bool,
+    pub name_buffer: String,
+    pub name_game_idx: usize,
+    pub name_score: u32,
 }
 
 impl App {
@@ -78,10 +86,19 @@ impl App {
             beam: BeamGame::new(),
             high_scores: HighScores::load(),
             show_high_scores: false,
+            entering_name: false,
+            name_buffer: String::new(),
+            name_game_idx: 0,
+            name_score: 0,
         }
     }
 
     pub fn on_tick(&mut self) {
+        // Don't update games while entering a name
+        if self.entering_name {
+            return;
+        }
+
         match self.current_tab {
             Tab::Home => {}
             Tab::Frogger => self.frogger.update(),
@@ -91,7 +108,7 @@ impl App {
             Tab::JezzBall => self.jezzball.update(),
             Tab::Beam => self.beam.update(),
         }
-        // Auto-submit scores when games end
+        // Check for high scores when games end
         self.check_submit_scores();
     }
 
@@ -106,8 +123,18 @@ impl App {
         ];
         for (idx, game_over, score) in games {
             if game_over && score > 0 && !self.high_scores.was_submitted(idx) {
-                self.high_scores.submit(idx, score);
-                self.high_scores.mark_submitted(idx);
+                if self.high_scores.qualifies(idx, score) {
+                    // Prompt for name entry
+                    self.entering_name = true;
+                    self.name_buffer.clear();
+                    self.name_game_idx = idx;
+                    self.name_score = score;
+                    self.high_scores.mark_submitted(idx);
+                    return; // Only one at a time
+                } else {
+                    // Score doesn't qualify, just mark as submitted
+                    self.high_scores.mark_submitted(idx);
+                }
             }
             if !game_over && self.high_scores.was_submitted(idx) {
                 self.high_scores.clear_submitted(idx);
@@ -119,6 +146,12 @@ impl App {
         // Ctrl+C always quits
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.should_quit = true;
+            return;
+        }
+
+        // If entering a name, intercept all input
+        if self.entering_name {
+            self.handle_name_input(key);
             return;
         }
 
@@ -207,6 +240,38 @@ impl App {
             Tab::Pinball => self.pinball.handle_input(key),
             Tab::JezzBall => self.jezzball.handle_input(key),
             Tab::Beam => self.beam.handle_input(key),
+        }
+    }
+
+    fn handle_name_input(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => {
+                // Submit the score with the entered name
+                let name = if self.name_buffer.is_empty() {
+                    "???".to_string()
+                } else {
+                    self.name_buffer.clone()
+                };
+                self.high_scores.submit(self.name_game_idx, &name, self.name_score);
+                self.entering_name = false;
+                self.name_buffer.clear();
+            }
+            KeyCode::Backspace => {
+                self.name_buffer.pop();
+            }
+            KeyCode::Esc => {
+                // Cancel — submit with default name
+                self.high_scores.submit(self.name_game_idx, "???", self.name_score);
+                self.entering_name = false;
+                self.name_buffer.clear();
+            }
+            KeyCode::Char(c) => {
+                // Only allow printable ASCII characters, up to MAX_NAME_LEN
+                if self.name_buffer.chars().count() < MAX_NAME_LEN && c.is_ascii_graphic() {
+                    self.name_buffer.push(c.to_ascii_uppercase());
+                }
+            }
+            _ => {}
         }
     }
 

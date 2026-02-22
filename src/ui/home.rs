@@ -471,19 +471,28 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
             ),
         ]));
 
-        let has_any = scores.iter().any(|&s| s > 0);
+        let has_any = scores.iter().any(|e| e.score > 0);
         if has_any {
             for rank in 0..3 {
-                if scores[rank] > 0 {
+                if scores[rank].score > 0 {
                     let medal = match rank {
                         0 => "🥇",
                         1 => "🥈",
                         _ => "🥉",
                     };
+                    let name_display = if scores[rank].name.is_empty() {
+                        "???".to_string()
+                    } else {
+                        format!("{:<9}", scores[rank].name)
+                    };
                     lines.push(Line::from(vec![
                         Span::styled(format!("    {} ", medal), Style::default()),
                         Span::styled(
-                            format!("{}", scores[rank]),
+                            format!("{} ", name_display),
+                            Style::default().fg(Color::Rgb(200, 200, 220)),
+                        ),
+                        Span::styled(
+                            format!("{}", scores[rank].score),
                             Style::default().fg(medal_colors[rank]).add_modifier(Modifier::BOLD),
                         ),
                     ]));

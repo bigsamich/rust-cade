@@ -1,20 +1,38 @@
 use std::fs;
 use std::path::PathBuf;
 
-const MAGIC: &[u8; 4] = b"RCHS";
+const MAGIC: &[u8; 4] = b"RCS2";
 const NUM_GAMES: usize = 6;
 const SCORES_PER_GAME: usize = 3;
 const TOTAL_SCORES: usize = NUM_GAMES * SCORES_PER_GAME;
-// File size: 4 magic + 18 * 4 bytes = 76 bytes
-const FILE_SIZE: usize = 4 + TOTAL_SCORES * 4;
+const NAME_LEN: usize = 9;
+// Each entry: 9 bytes name + 4 bytes score = 13 bytes
+const ENTRY_SIZE: usize = NAME_LEN + 4;
+// File size: 4 magic + 18 * 13 = 238 bytes
+const FILE_SIZE: usize = 4 + TOTAL_SCORES * ENTRY_SIZE;
 
 pub const GAME_NAMES: [&str; NUM_GAMES] = [
     "Frogger", "Breakout", "Dino Run", "Pinball", "JezzBall", "Beam",
 ];
 
 #[derive(Clone)]
+pub struct ScoreEntry {
+    pub name: String,
+    pub score: u32,
+}
+
+impl ScoreEntry {
+    fn empty() -> Self {
+        ScoreEntry {
+            name: String::new(),
+            score: 0,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct HighScores {
-    scores: [[u32; SCORES_PER_GAME]; NUM_GAMES],
+    scores: Vec<Vec<ScoreEntry>>,
     path: PathBuf,
     /// Track which games have had their score submitted this session
     /// to avoid duplicate submissions
@@ -25,7 +43,9 @@ impl HighScores {
     pub fn load() -> Self {
         let path = Self::scores_path();
         let mut hs = HighScores {
-            scores: [[0; SCORES_PER_GAME]; NUM_GAMES],
+            scores: (0..NUM_GAMES)
+                .map(|_| (0..SCORES_PER_GAME).map(|_| ScoreEntry::empty()).collect())
+                .collect(),
             path,
             submitted: [false; NUM_GAMES],
         };
@@ -51,13 +71,24 @@ impl HighScores {
         let mut offset = 4;
         for game in 0..NUM_GAMES {
             for slot in 0..SCORES_PER_GAME {
-                if offset + 4 <= data.len() {
+                if offset + ENTRY_SIZE <= data.len() {
+                    // Read 9-byte name
+                    let name_bytes = &data[offset..offset + NAME_LEN];
+                    let name = String::from_utf8_lossy(name_bytes)
+                        .trim_end_matches('\0')
+                        .trim_end()
+                        .to_string();
+                    offset += NAME_LEN;
+
+                    // Read 4-byte score
                     let bytes: [u8; 4] = [
                         data[offset], data[offset + 1],
                         data[offset + 2], data[offset + 3],
                     ];
-                    self.scores[game][slot] = u32::from_le_bytes(bytes);
+                    let score = u32::from_le_bytes(bytes);
                     offset += 4;
+
+                    self.scores[game][slot] = ScoreEntry { name, score };
                 }
             }
         }
@@ -68,20 +99,43 @@ impl HighScores {
         buf.extend_from_slice(MAGIC);
         for game in 0..NUM_GAMES {
             for slot in 0..SCORES_PER_GAME {
-                buf.extend_from_slice(&self.scores[game][slot].to_le_bytes());
+                let entry = &self.scores[game][slot];
+                // Write 9-byte name (padded with zeros)
+                let name_bytes = entry.name.as_bytes();
+                let len = name_bytes.len().min(NAME_LEN);
+                buf.extend_from_slice(&name_bytes[..len]);
+                for _ in len..NAME_LEN {
+                    buf.push(0);
+                }
+                // Write 4-byte score
+                buf.extend_from_slice(&entry.score.to_le_bytes());
             }
         }
         let _ = fs::write(&self.path, &buf);
     }
 
-    /// Submit a score for a game. Returns true if it's a new high score (top 3).
-    pub fn submit(&mut self, game_idx: usize, score: u32) -> bool {
+    /// Check if a score would qualify for the top 3 (without inserting it)
+    pub fn qualifies(&self, game_idx: usize, score: u32) -> bool {
         if game_idx >= NUM_GAMES || score == 0 { return false; }
+        for i in 0..SCORES_PER_GAME {
+            if score > self.scores[game_idx][i].score {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Submit a score for a game with a name. Returns true if it's a new high score (top 3).
+    pub fn submit(&mut self, game_idx: usize, name: &str, score: u32) -> bool {
+        if game_idx >= NUM_GAMES || score == 0 { return false; }
+
+        // Truncate name to 9 chars
+        let name: String = name.chars().take(NAME_LEN).collect();
 
         // Find insertion point (sorted descending)
         let mut insert_at = None;
         for i in 0..SCORES_PER_GAME {
-            if score > self.scores[game_idx][i] {
+            if score > self.scores[game_idx][i].score {
                 insert_at = Some(i);
                 break;
             }
@@ -90,9 +144,9 @@ impl HighScores {
         if let Some(pos) = insert_at {
             // Shift lower scores down
             for i in (pos + 1..SCORES_PER_GAME).rev() {
-                self.scores[game_idx][i] = self.scores[game_idx][i - 1];
+                self.scores[game_idx][i] = self.scores[game_idx][i - 1].clone();
             }
-            self.scores[game_idx][pos] = score;
+            self.scores[game_idx][pos] = ScoreEntry { name, score };
             self.write_file();
             true
         } else {
@@ -100,12 +154,12 @@ impl HighScores {
         }
     }
 
-    /// Get top 3 scores for a game
-    pub fn top_scores(&self, game_idx: usize) -> [u32; SCORES_PER_GAME] {
+    /// Get top 3 score entries for a game
+    pub fn top_scores(&self, game_idx: usize) -> Vec<ScoreEntry> {
         if game_idx >= NUM_GAMES {
-            return [0; SCORES_PER_GAME];
+            return vec![ScoreEntry::empty(); SCORES_PER_GAME];
         }
-        self.scores[game_idx]
+        self.scores[game_idx].clone()
     }
 
     /// Check if a game score has been submitted this run (to avoid duplicates)
