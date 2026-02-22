@@ -396,7 +396,7 @@ impl BeamGame {
     }
 
     fn advance_beam(&mut self) {
-        self.beam_progress += 0.15;
+        self.beam_progress += 0.40;
 
         if self.beam_progress >= 1.0 {
             self.beam_progress = 0.0;
@@ -602,7 +602,11 @@ impl Game for BeamGame {
         if self.beam_running {
             // Update magnet powers from ramp interpolation based on current turn
             self.sync_interpolated_powers();
-            self.advance_beam();
+            // Run multiple simulation steps per frame for faster gameplay
+            for _ in 0..3 {
+                if self.beam_lost || self.beam_completed { break; }
+                self.advance_beam();
+            }
             // Record history every few ticks
             if self.tick % 3 == 0 {
                 self.pos_history.push(self.beam_position);
@@ -1042,7 +1046,7 @@ impl Game for BeamGame {
             bar_chars[right_lz] = ('┆', Style::default().fg(Color::Rgb(255, 200, 50)).bg(Color::Rgb(15, 15, 25)));
         }
 
-        // Draw beam
+        // Draw beam with smooth gradient using density characters
         if self.beam_running && !self.beam_lost {
             let beam_center = (center as f32 + self.beam_position * scale) as usize;
             let beam_half = (self.beam_size * scale * 0.5) as usize;
@@ -1052,9 +1056,15 @@ impl Game for BeamGame {
                 if x < bar_w {
                     let dist = (x as f32 - beam_center as f32).abs();
                     let intensity = 1.0 - dist / (beam_half as f32 + 1.0);
-                    let g = (100.0 + intensity * 155.0) as u8;
-                    let b = (150.0 + intensity * 105.0) as u8;
-                    bar_chars[x] = ('█', Style::default().fg(Color::Rgb(30, g, b)).bg(Color::Rgb(15, 15, 25)));
+                    // Use density characters for smooth beam edges
+                    let ch = if intensity > 0.8 { '█' }
+                        else if intensity > 0.6 { '▓' }
+                        else if intensity > 0.35 { '▒' }
+                        else { '░' };
+                    let g = (80.0 + intensity * 175.0) as u8;
+                    let b = (120.0 + intensity * 135.0) as u8;
+                    let r = (10.0 + intensity * 60.0) as u8;
+                    bar_chars[x] = (ch, Style::default().fg(Color::Rgb(r, g, b)).bg(Color::Rgb(15, 15, 25)));
                 }
             }
             if beam_center < bar_w {
@@ -1100,7 +1110,7 @@ impl Game for BeamGame {
             y_bar_chars[y_right_lz] = ('┆', Style::default().fg(Color::Rgb(255, 200, 50)).bg(Color::Rgb(15, 15, 25)));
         }
 
-        // Draw beam Y
+        // Draw beam Y with smooth gradient using density characters
         if self.beam_running && !self.beam_lost {
             let beam_y_center = (y_center as f32 + self.beam_y_position * y_scale) as usize;
             let beam_y_half = (self.beam_y_size * y_scale * 0.5) as usize;
@@ -1110,9 +1120,13 @@ impl Game for BeamGame {
                 if x < y_bar_w {
                     let dist = (x as f32 - beam_y_center as f32).abs();
                     let intensity = 1.0 - dist / (beam_y_half as f32 + 1.0);
-                    let r = (80.0 + intensity * 120.0) as u8;
-                    let b = (140.0 + intensity * 115.0) as u8;
-                    y_bar_chars[x] = ('█', Style::default().fg(Color::Rgb(r, 30, b)).bg(Color::Rgb(15, 15, 25)));
+                    let ch = if intensity > 0.8 { '█' }
+                        else if intensity > 0.6 { '▓' }
+                        else if intensity > 0.35 { '▒' }
+                        else { '░' };
+                    let r = (60.0 + intensity * 140.0) as u8;
+                    let b = (100.0 + intensity * 155.0) as u8;
+                    y_bar_chars[x] = (ch, Style::default().fg(Color::Rgb(r, 20, b)).bg(Color::Rgb(15, 15, 25)));
                 }
             }
             if beam_y_center < y_bar_w {
@@ -1135,19 +1149,19 @@ impl Game for BeamGame {
         y_bar_lines.push(Line::from(y_spans));
         frame.render_widget(Paragraph::new(y_bar_lines), chunks[2]);
 
-        // Ring visualization - show all 24 sections as a ring layout
+        // Ring visualization - show all 24 sections as a compact ring layout
         let ring_w = middle[1].width as usize;
         let ring_h = middle[1].height as usize;
         let cx = ring_w as f32 / 2.0;
         let cy = ring_h as f32 / 2.0;
-        let rx = (ring_w as f32 * 0.35).min(cx - 3.0);
-        let ry = (ring_h as f32 * 0.38).min(cy - 1.0);
+        let rx = (ring_w as f32 * 0.22).min(cx - 2.0);
+        let ry = (ring_h as f32 * 0.28).min(cy - 1.0);
 
         let mut grid: Vec<Vec<(char, Style)>> =
             vec![vec![(' ', Style::default()); ring_w]; ring_h];
 
-        // Draw connecting dots between sections
-        let connect_steps = 3; // dots between each pair of sections
+        // Draw connecting arcs between sections using fine characters
+        let connect_steps = 2; // fewer dots for compact ring
         for sec in 0..NUM_SECTIONS {
             let a1 = (sec as f32 / NUM_SECTIONS as f32) * std::f32::consts::PI * 2.0 - std::f32::consts::FRAC_PI_2;
             let a2 = ((sec + 1) as f32 / NUM_SECTIONS as f32) * std::f32::consts::PI * 2.0 - std::f32::consts::FRAC_PI_2;
@@ -1157,7 +1171,10 @@ impl Game for BeamGame {
                 let dx = (cx + rx * a.cos()) as usize;
                 let dy = (cy + ry * a.sin()) as usize;
                 if dx < ring_w && dy < ring_h && grid[dy][dx].0 == ' ' {
-                    grid[dy][dx] = ('·', Style::default().fg(Color::Rgb(35, 45, 55)));
+                    // Use different connector chars based on angle for a nicer arc
+                    let tangent = a.cos().abs();
+                    let ch = if tangent > 0.7 { '─' } else if tangent < 0.3 { '│' } else { '·' };
+                    grid[dy][dx] = (ch, Style::default().fg(Color::Rgb(30, 40, 55)));
                 }
             }
         }
@@ -1206,10 +1223,10 @@ impl Game for BeamGame {
 
             grid[iy][ix] = (ch, style);
 
-            // Section number label (offset outward)
+            // Section number label (offset outward, tighter for compact ring)
             let label_angle = angle;
-            let lx = (cx + (rx + 3.0) * label_angle.cos()) as usize;
-            let ly = (cy + (ry + 1.5) * label_angle.sin()) as usize;
+            let lx = (cx + (rx + 2.0) * label_angle.cos()) as usize;
+            let ly = (cy + (ry + 1.0) * label_angle.sin()) as usize;
             if lx < ring_w && ly < ring_h {
                 // Section number + restriction info for restricted sections
                 let sec_restrictions: Vec<String> = self.restrictions.iter()
