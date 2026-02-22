@@ -43,8 +43,6 @@ Launch the arcade:
 rustcade
 ```
 
-Use the tab-based menu to browse and select a game, or press a number key to quick-launch.
-
 ## 🎛️ Controls
 
 ### Global
@@ -59,15 +57,6 @@ Use the tab-based menu to browse and select a game, or press a number key to qui
 | `Esc` | Return to menu from any game |
 | `Q` | Quit (from home screen) |
 | `Ctrl+C` | Force quit |
-
-### High Score Name Entry
-
-| Key | Action |
-|-----|--------|
-| Any letter/number | Type character (uppercase, max 9 chars) |
-| `Backspace` | Delete last character |
-| `Enter` | Submit name |
-| `Esc` | Cancel (submits as "???") |
 
 ### Common In-Game Controls
 
@@ -168,7 +157,7 @@ src/
 
 ## 🔀 Cross Compiling
 
-Rust-cade can be cross-compiled for different platforms using [`cross`](https://github.com/cross-rs/cross), which handles toolchains and system libraries automatically via pre-configured Docker containers.
+Rust-cade can be cross-compiled for different platforms using [`cross`](https://github.com/cross-rs/cross).
 
 ### Install cross
 
@@ -208,6 +197,10 @@ The binary will be at `target/<target-triple>/release/rustcade`.
 - Rust-cade is a pure terminal application with no native GUI dependencies, making it straightforward to cross-compile.
 - All dependencies (`ratatui`, `crossterm`, `rand`) are pure Rust, so no C library cross-compilation is needed.
 - You can list all available targets with `rustup target list`.
+
+## 🤖 Built with Cline
+
+This project is developed with the help of [Cline](https://github.com/cline/cline) `v2.4.2` — an AI-powered coding assistant that runs in your terminal. Cline handles code generation, refactoring, documentation, and cross-file edits through conversational interaction.
 
 ## 🤝 Contributing
 
