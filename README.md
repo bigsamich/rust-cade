@@ -200,7 +200,7 @@ The binary will be at `target/<target-triple>/release/rustcade`.
 
 ## 🤖 Built with Cline
 
-This project is developed with the help of [Cline](https://github.com/cline/cline) `v2.4.2` — an AI-powered coding assistant that runs in your terminal. Cline handles code generation, refactoring, documentation, and cross-file edits through conversational interaction.
+This project is developed with [Cline](https://github.com/cline/cline) `v2.4.2` — an AI-powered coding assistant.
 
 ## 🤝 Contributing
 
