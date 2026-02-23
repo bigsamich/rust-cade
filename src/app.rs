@@ -1,5 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::games::asteroids::Asteroids;
 use crate::games::beam::BeamGame;
 use crate::games::booster::BoosterGame;
 use crate::games::breakout::Breakout;
@@ -20,13 +21,14 @@ pub enum Tab {
     DinoRun,
     Pinball,
     JezzBall,
+    Asteroids,
     Booster,
     Beam,
 }
 
 impl Tab {
     pub fn all() -> &'static [Tab] {
-        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Booster, Tab::Beam]
+        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Asteroids, Tab::Booster, Tab::Beam]
     }
 
     pub fn title(&self) -> &str {
@@ -37,6 +39,7 @@ impl Tab {
             Tab::DinoRun => " Dino Run ",
             Tab::Pinball => " Pinball ",
             Tab::JezzBall => " JezzBall ",
+            Tab::Asteroids => " Asteroids ",
             Tab::Booster => " Booster ",
             Tab::Beam => " Beam ",
         }
@@ -50,8 +53,9 @@ impl Tab {
             Tab::DinoRun => 3,
             Tab::Pinball => 4,
             Tab::JezzBall => 5,
-            Tab::Booster => 6,
-            Tab::Beam => 7,
+            Tab::Asteroids => 6,
+            Tab::Booster => 7,
+            Tab::Beam => 8,
         }
     }
 
@@ -60,12 +64,13 @@ impl Tab {
 pub struct App {
     pub should_quit: bool,
     pub current_tab: Tab,
-    pub selected_game: usize, // 0-6 for home screen game selection
+    pub selected_game: usize, // 0-7 for home screen game selection
     pub frogger: Frogger,
     pub breakout: Breakout,
     pub dino_run: DinoRun,
     pub pinball: Pinball,
     pub jezzball: JezzBall,
+    pub asteroids: Asteroids,
     pub booster: BoosterGame,
     pub beam: BeamGame,
     pub high_scores: HighScores,
@@ -88,6 +93,7 @@ impl App {
             dino_run: DinoRun::new(),
             pinball: Pinball::new(),
             jezzball: JezzBall::new(),
+            asteroids: Asteroids::new(),
             booster: BoosterGame::new(),
             beam: BeamGame::new(),
             high_scores: HighScores::load(),
@@ -112,6 +118,7 @@ impl App {
             Tab::DinoRun => self.dino_run.update(),
             Tab::Pinball => self.pinball.update(),
             Tab::JezzBall => self.jezzball.update(),
+            Tab::Asteroids => self.asteroids.update(),
             Tab::Booster => self.booster.update(),
             Tab::Beam => self.beam.update(),
         }
@@ -120,14 +127,15 @@ impl App {
     }
 
     fn check_submit_scores(&mut self) {
-        let games: [(usize, bool, u32); 7] = [
+        let games: [(usize, bool, u32); 8] = [
             (0, self.frogger.is_game_over(), self.frogger.get_score()),
             (1, self.breakout.is_game_over(), self.breakout.get_score()),
             (2, self.dino_run.is_game_over(), self.dino_run.get_score()),
             (3, self.pinball.is_game_over(), self.pinball.get_score()),
             (4, self.jezzball.is_game_over(), self.jezzball.get_score()),
-            (5, self.booster.is_game_over(), self.booster.get_score()),
-            (6, self.beam.is_game_over(), self.beam.get_score()),
+            (5, self.asteroids.is_game_over(), self.asteroids.get_score()),
+            (6, self.booster.is_game_over(), self.booster.get_score()),
+            (7, self.beam.is_game_over(), self.beam.get_score()),
         ];
         for (idx, game_over, score) in games {
             if game_over && score > 0 && !self.high_scores.was_submitted(idx) {
@@ -200,24 +208,25 @@ impl App {
                 KeyCode::Char('3') => { self.current_tab = Tab::DinoRun; return; }
                 KeyCode::Char('4') => { self.current_tab = Tab::Pinball; return; }
                 KeyCode::Char('5') => { self.current_tab = Tab::JezzBall; return; }
+                KeyCode::Char('6') => { self.current_tab = Tab::Asteroids; return; }
                 KeyCode::Char('h') | KeyCode::Char('H') => {
                     self.show_high_scores = !self.show_high_scores;
                     return;
                 }
-                KeyCode::Char('6') => { self.current_tab = Tab::Booster; return; }
-                KeyCode::Char('7') => { self.current_tab = Tab::Beam; return; }
-                // Arrow key navigation for game tile selection (2 rows: 4 + 3)
+                KeyCode::Char('7') => { self.current_tab = Tab::Booster; return; }
+                KeyCode::Char('8') => { self.current_tab = Tab::Beam; return; }
+                // Arrow key navigation for game tile selection (2 rows: 4 + 4)
                 KeyCode::Right => {
-                    self.selected_game = (self.selected_game + 1) % 7;
+                    self.selected_game = (self.selected_game + 1) % 8;
                     return;
                 }
                 KeyCode::Left => {
-                    self.selected_game = (self.selected_game + 6) % 7;
+                    self.selected_game = (self.selected_game + 7) % 8;
                     return;
                 }
                 KeyCode::Down => {
                     if self.selected_game < 4 {
-                        self.selected_game = (self.selected_game + 4).min(6);
+                        self.selected_game = self.selected_game + 4;
                     } else {
                         self.selected_game -= 4;
                     }
@@ -227,7 +236,7 @@ impl App {
                     if self.selected_game >= 4 {
                         self.selected_game -= 4;
                     } else {
-                        self.selected_game = (self.selected_game + 4).min(6);
+                        self.selected_game = self.selected_game + 4;
                     }
                     return;
                 }
@@ -239,8 +248,9 @@ impl App {
                         2 => Tab::DinoRun,
                         3 => Tab::Pinball,
                         4 => Tab::JezzBall,
-                        5 => Tab::Booster,
-                        6 => Tab::Beam,
+                        5 => Tab::Asteroids,
+                        6 => Tab::Booster,
+                        7 => Tab::Beam,
                         _ => Tab::Home,
                     };
                     return;
@@ -257,6 +267,7 @@ impl App {
             Tab::DinoRun => self.dino_run.handle_input(key),
             Tab::Pinball => self.pinball.handle_input(key),
             Tab::JezzBall => self.jezzball.handle_input(key),
+            Tab::Asteroids => self.asteroids.handle_input(key),
             Tab::Booster => self.booster.handle_input(key),
             Tab::Beam => self.beam.handle_input(key),
         }

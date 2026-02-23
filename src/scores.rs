@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const MAGIC: &[u8; 4] = b"RCS2";
-const NUM_GAMES: usize = 7;
+const NUM_GAMES: usize = 8;
 const SCORES_PER_GAME: usize = 3;
 const TOTAL_SCORES: usize = NUM_GAMES * SCORES_PER_GAME;
 const NAME_LEN: usize = 9;
@@ -12,7 +12,7 @@ const ENTRY_SIZE: usize = NAME_LEN + 4;
 const FILE_SIZE: usize = 4 + TOTAL_SCORES * ENTRY_SIZE;
 
 pub const GAME_NAMES: [&str; NUM_GAMES] = [
-    "Frogger", "Breakout", "Dino Run", "Pinball", "JezzBall", "Booster", "Beam",
+    "Frogger", "Breakout", "Dino Run", "Pinball", "JezzBall", "Asteroids", "Booster", "Beam",
 ];
 
 #[derive(Clone)]

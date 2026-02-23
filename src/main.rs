@@ -28,7 +28,7 @@ fn main() -> io::Result<()> {
 
     // Create app and event handler
     let mut app = App::new();
-    let event_handler = EventHandler::new(33); // ~30 FPS
+    let event_handler = EventHandler::new(16); // ~60 FPS
 
     // Main loop
     loop {

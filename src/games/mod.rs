@@ -1,3 +1,4 @@
+pub mod asteroids;
 pub mod beam;
 pub mod booster;
 pub mod breakout;

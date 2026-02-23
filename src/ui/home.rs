@@ -22,14 +22,15 @@ struct GameTile {
     border_color: Color,
 }
 
-const GAME_TILES: [GameTile; 7] = [
+const GAME_TILES: [GameTile; 8] = [
     GameTile { key: "1", icon: "🐸", name: "Frogger", desc: "Cross the road\nand river!", color: Color::Rgb(80, 220, 80), border_color: Color::Rgb(40, 120, 40) },
     GameTile { key: "2", icon: "🧱", name: "Breakout", desc: "Smash bricks\nwith the ball!", color: Color::Rgb(220, 80, 80), border_color: Color::Rgb(120, 40, 40) },
     GameTile { key: "3", icon: "🦖", name: "Dino Run", desc: "Jump obstacles\nin endless run!", color: Color::Rgb(200, 120, 255), border_color: Color::Rgb(100, 60, 140) },
     GameTile { key: "4", icon: "🎱", name: "Pinball", desc: "Hit bumpers\nfor combos!", color: Color::Rgb(255, 200, 80), border_color: Color::Rgb(140, 100, 40) },
     GameTile { key: "5", icon: "🟦", name: "JezzBall", desc: "Build walls to\ntrap the balls!", color: Color::Rgb(100, 180, 255), border_color: Color::Rgb(50, 90, 140) },
-    GameTile { key: "6", icon: "⚛", name: "Booster", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
-    GameTile { key: "7", icon: "💫", name: "Beam", desc: "Tune the ring\nfor 5 orbits!", color: Color::Rgb(255, 160, 60), border_color: Color::Rgb(140, 80, 30) },
+    GameTile { key: "6", icon: "☄", name: "Asteroids", desc: "Shoot rocks\nin deep space!", color: Color::Rgb(100, 200, 255), border_color: Color::Rgb(50, 100, 140) },
+    GameTile { key: "7", icon: "⚛", name: "Booster", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
+    GameTile { key: "8", icon: "💫", name: "Beam", desc: "Tune the ring\nfor 5 orbits!", color: Color::Rgb(255, 160, 60), border_color: Color::Rgb(140, 80, 30) },
 ];
 
 fn render_game_tile(frame: &mut Frame, area: Rect, tile: &GameTile, selected: bool) {
@@ -200,7 +201,37 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
                 Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
         ],
-        5 => vec![ // Booster
+        5 => vec![ // Asteroids
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  \u{2604} Asteroids", Style::default().fg(Color::Rgb(100, 200, 255)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Blast asteroids in deep space!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    \u{2190} / \u{2192}            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Rotate ship", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    \u{2191}                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Thrust", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Shoot", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Restart", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    P                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
+        6 => vec![ // Booster
             Line::from(""),
             Line::from(vec![
                 Span::styled("  ⚛ Booster", Style::default().fg(Color::Rgb(120, 200, 255)).add_modifier(Modifier::BOLD)),
@@ -253,7 +284,7 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
                 Span::styled("Bump X / Y only", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
         ],
-        6 => vec![ // Beam
+        7 => vec![ // Beam
             Line::from(""),
             Line::from(vec![
                 Span::styled("  💫 Beam", Style::default().fg(Color::Rgb(255, 160, 60)).add_modifier(Modifier::BOLD)),
@@ -382,7 +413,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
     for i in 0..4 {
         render_game_tile(frame, top_cols[i], &GAME_TILES[i], selected_game == i);
     }
-    for i in 0..3 {
+    for i in 0..4 {
         render_game_tile(frame, bot_cols[i], &GAME_TILES[i + 4], selected_game == i + 4);
     }
 
@@ -406,7 +437,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
             Span::styled("Switch tabs", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
-            Span::styled("    1-7              ", Style::default().fg(Color::Rgb(80, 200, 255))),
+            Span::styled("    1-8              ", Style::default().fg(Color::Rgb(80, 200, 255))),
             Span::styled("Launch game", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
@@ -481,7 +512,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
 fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighScores) {
     // Center overlay
     let overlay_w = 50u16.min(area.width.saturating_sub(4));
-    let overlay_h = 26u16.min(area.height.saturating_sub(4));
+    let overlay_h = 30u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(overlay_w)) / 2;
     let y = area.y + (area.height.saturating_sub(overlay_h)) / 2;
     let overlay_area = Rect::new(x, y, overlay_w, overlay_h);
@@ -499,13 +530,14 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
     let inner = block.inner(overlay_area);
     frame.render_widget(block, overlay_area);
 
-    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "⚛", "💫"];
+    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "☄", "⚛", "💫"];
     let colors = [
         Color::Rgb(80, 220, 80),
         Color::Rgb(220, 80, 80),
         Color::Rgb(200, 120, 255),
         Color::Rgb(255, 200, 80),
         Color::Rgb(100, 180, 255),
+        Color::Rgb(100, 200, 255),
         Color::Rgb(120, 200, 255),
         Color::Rgb(255, 160, 60),
     ];
@@ -518,7 +550,7 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    for game_idx in 0..7 {
+    for game_idx in 0..8 {
         let scores = high_scores.top_scores(game_idx);
         lines.push(Line::from(vec![
             Span::styled(format!("  {} ", icons[game_idx]), Style::default()),
