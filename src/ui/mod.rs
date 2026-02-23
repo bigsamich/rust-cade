@@ -26,7 +26,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Tab::DinoRun => app.dino_run.render(frame, chunks[1]),
         Tab::Pinball => app.pinball.render(frame, chunks[1]),
         Tab::JezzBall => app.jezzball.render(frame, chunks[1]),
-        Tab::Beam => app.beam.render(frame, chunks[1]),
+        Tab::Booster => app.booster.render(frame, chunks[1]),
     }
 
     // Name entry overlay (renders on top of everything)

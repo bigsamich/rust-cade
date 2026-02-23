@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::games::beam::BeamGame;
+use crate::games::booster::BoosterGame;
 use crate::games::breakout::Breakout;
 use crate::games::dino_run::DinoRun;
 use crate::games::frogger::Frogger;
@@ -19,12 +19,12 @@ pub enum Tab {
     DinoRun,
     Pinball,
     JezzBall,
-    Beam,
+    Booster,
 }
 
 impl Tab {
     pub fn all() -> &'static [Tab] {
-        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Beam]
+        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Booster]
     }
 
     pub fn title(&self) -> &str {
@@ -35,7 +35,7 @@ impl Tab {
             Tab::DinoRun => " Dino Run ",
             Tab::Pinball => " Pinball ",
             Tab::JezzBall => " JezzBall ",
-            Tab::Beam => " Beam ",
+            Tab::Booster => " Booster ",
         }
     }
 
@@ -47,7 +47,7 @@ impl Tab {
             Tab::DinoRun => 3,
             Tab::Pinball => 4,
             Tab::JezzBall => 5,
-            Tab::Beam => 6,
+            Tab::Booster => 6,
         }
     }
 
@@ -62,7 +62,7 @@ pub struct App {
     pub dino_run: DinoRun,
     pub pinball: Pinball,
     pub jezzball: JezzBall,
-    pub beam: BeamGame,
+    pub booster: BoosterGame,
     pub high_scores: HighScores,
     pub show_high_scores: bool,
     // Name entry state
@@ -83,7 +83,7 @@ impl App {
             dino_run: DinoRun::new(),
             pinball: Pinball::new(),
             jezzball: JezzBall::new(),
-            beam: BeamGame::new(),
+            booster: BoosterGame::new(),
             high_scores: HighScores::load(),
             show_high_scores: false,
             entering_name: false,
@@ -106,7 +106,7 @@ impl App {
             Tab::DinoRun => self.dino_run.update(),
             Tab::Pinball => self.pinball.update(),
             Tab::JezzBall => self.jezzball.update(),
-            Tab::Beam => self.beam.update(),
+            Tab::Booster => self.booster.update(),
         }
         // Check for high scores when games end
         self.check_submit_scores();
@@ -119,7 +119,7 @@ impl App {
             (2, self.dino_run.is_game_over(), self.dino_run.get_score()),
             (3, self.pinball.is_game_over(), self.pinball.get_score()),
             (4, self.jezzball.is_game_over(), self.jezzball.get_score()),
-            (5, self.beam.is_game_over(), self.beam.get_score()),
+            (5, self.booster.is_game_over(), self.booster.get_score()),
         ];
         for (idx, game_over, score) in games {
             if game_over && score > 0 && !self.high_scores.was_submitted(idx) {
@@ -196,7 +196,7 @@ impl App {
                     self.show_high_scores = !self.show_high_scores;
                     return;
                 }
-                KeyCode::Char('6') => { self.current_tab = Tab::Beam; return; }
+                KeyCode::Char('6') => { self.current_tab = Tab::Booster; return; }
                 // Arrow key navigation for game tile selection (2 rows x 3 cols)
                 KeyCode::Right => {
                     self.selected_game = (self.selected_game + 1) % 6;
@@ -222,7 +222,7 @@ impl App {
                         2 => Tab::DinoRun,
                         3 => Tab::Pinball,
                         4 => Tab::JezzBall,
-                        5 => Tab::Beam,
+                        5 => Tab::Booster,
                         _ => Tab::Home,
                     };
                     return;
@@ -239,7 +239,7 @@ impl App {
             Tab::DinoRun => self.dino_run.handle_input(key),
             Tab::Pinball => self.pinball.handle_input(key),
             Tab::JezzBall => self.jezzball.handle_input(key),
-            Tab::Beam => self.beam.handle_input(key),
+            Tab::Booster => self.booster.handle_input(key),
         }
     }
 
