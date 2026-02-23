@@ -28,7 +28,7 @@ const GAME_TILES: [GameTile; 6] = [
     GameTile { key: "3", icon: "🦖", name: "Dino Run", desc: "Jump obstacles\nin endless run!", color: Color::Rgb(200, 120, 255), border_color: Color::Rgb(100, 60, 140) },
     GameTile { key: "4", icon: "🎱", name: "Pinball", desc: "Hit bumpers\nfor combos!", color: Color::Rgb(255, 200, 80), border_color: Color::Rgb(140, 100, 40) },
     GameTile { key: "5", icon: "🟦", name: "JezzBall", desc: "Build walls to\ntrap the balls!", color: Color::Rgb(100, 180, 255), border_color: Color::Rgb(50, 90, 140) },
-    GameTile { key: "6", icon: "⚛", name: "Beam", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
+    GameTile { key: "6", icon: "⚛", name: "Booster", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
 ];
 
 fn render_game_tile(frame: &mut Frame, area: Rect, tile: &GameTile, selected: bool) {
@@ -199,10 +199,10 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
                 Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
         ],
-        5 => vec![ // Beam
+        5 => vec![ // Booster
             Line::from(""),
             Line::from(vec![
-                Span::styled("  ⚛ Beam", Style::default().fg(Color::Rgb(120, 200, 255)).add_modifier(Modifier::BOLD)),
+                Span::styled("  ⚛ Booster", Style::default().fg(Color::Rgb(120, 200, 255)).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(vec![
                 Span::styled("  Tune magnets, steer a beam", Style::default().fg(Color::Rgb(100, 100, 120))),

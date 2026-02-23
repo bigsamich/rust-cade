@@ -1,4 +1,4 @@
-pub mod beam;
+pub mod booster;
 pub mod breakout;
 pub mod dino_run;
 pub mod frogger;
