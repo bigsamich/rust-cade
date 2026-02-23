@@ -26,7 +26,7 @@ const GAME_TILES: [GameTile; 8] = [
     GameTile { key: "1", icon: "🐸", name: "Frogger", desc: "Cross the road\nand river!", color: Color::Rgb(80, 220, 80), border_color: Color::Rgb(40, 120, 40) },
     GameTile { key: "2", icon: "🧱", name: "Breakout", desc: "Smash bricks\nwith the ball!", color: Color::Rgb(220, 80, 80), border_color: Color::Rgb(120, 40, 40) },
     GameTile { key: "3", icon: "🦖", name: "Dino Run", desc: "Jump obstacles\nin endless run!", color: Color::Rgb(200, 120, 255), border_color: Color::Rgb(100, 60, 140) },
-    GameTile { key: "4", icon: "🎱", name: "Pinball", desc: "Hit bumpers\nfor combos!", color: Color::Rgb(255, 200, 80), border_color: Color::Rgb(140, 100, 40) },
+    GameTile { key: "4", icon: "👾", name: "Invaders", desc: "Defend Earth\nfrom aliens!", color: Color::Rgb(80, 255, 80), border_color: Color::Rgb(40, 140, 40) },
     GameTile { key: "5", icon: "🟦", name: "JezzBall", desc: "Build walls to\ntrap the balls!", color: Color::Rgb(100, 180, 255), border_color: Color::Rgb(50, 90, 140) },
     GameTile { key: "6", icon: "☄", name: "Asteroids", desc: "Shoot rocks\nin deep space!", color: Color::Rgb(100, 200, 255), border_color: Color::Rgb(50, 100, 140) },
     GameTile { key: "7", icon: "⚛", name: "Booster", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
@@ -149,22 +149,22 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
                 Span::styled("Pause", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
         ],
-        3 => vec![ // Pinball
+        3 => vec![ // Space Invaders
             Line::from(""),
             Line::from(vec![
-                Span::styled("  🎱 Pinball", Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
+                Span::styled("  \u{1f47e} Space Invaders", Style::default().fg(Color::Rgb(80, 255, 80)).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(vec![
-                Span::styled("  Hit bumpers for combos!", Style::default().fg(Color::Rgb(100, 100, 120))),
+                Span::styled("  Defend Earth from alien waves!", Style::default().fg(Color::Rgb(100, 100, 120))),
             ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("    ← / →            ", Style::default().fg(Color::Rgb(80, 200, 255))),
-                Span::styled("Flippers", Style::default().fg(Color::Rgb(140, 140, 140))),
+                Span::styled("    \u{2190} / \u{2192}            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Move cannon", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
             Line::from(vec![
-                Span::styled("    Space            ", Style::default().fg(Color::Rgb(80, 200, 255))),
-                Span::styled("Launch ball", Style::default().fg(Color::Rgb(140, 140, 140))),
+                Span::styled("    Space / \u{2191}        ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Shoot", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
             Line::from(vec![
                 Span::styled("    R                ", Style::default().fg(Color::Rgb(80, 200, 255))),
@@ -530,12 +530,12 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
     let inner = block.inner(overlay_area);
     frame.render_widget(block, overlay_area);
 
-    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "☄", "⚛", "💫"];
+    let icons = ["🐸", "🧱", "🦖", "👾", "🟦", "☄", "⚛", "💫"];
     let colors = [
         Color::Rgb(80, 220, 80),
         Color::Rgb(220, 80, 80),
         Color::Rgb(200, 120, 255),
-        Color::Rgb(255, 200, 80),
+        Color::Rgb(80, 255, 80),
         Color::Rgb(100, 180, 255),
         Color::Rgb(100, 200, 255),
         Color::Rgb(120, 200, 255),

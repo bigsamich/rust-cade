@@ -24,7 +24,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Tab::Frogger => app.frogger.render(frame, chunks[1]),
         Tab::Breakout => app.breakout.render(frame, chunks[1]),
         Tab::DinoRun => app.dino_run.render(frame, chunks[1]),
-        Tab::Pinball => app.pinball.render(frame, chunks[1]),
+        Tab::SpaceInvaders => app.space_invaders.render(frame, chunks[1]),
         Tab::JezzBall => app.jezzball.render(frame, chunks[1]),
         Tab::Asteroids => app.asteroids.render(frame, chunks[1]),
         Tab::Booster => app.booster.render(frame, chunks[1]),

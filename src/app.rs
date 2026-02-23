@@ -7,7 +7,7 @@ use crate::games::breakout::Breakout;
 use crate::games::dino_run::DinoRun;
 use crate::games::frogger::Frogger;
 use crate::games::jezzball::JezzBall;
-use crate::games::pinball::Pinball;
+use crate::games::space_invaders::SpaceInvaders;
 use crate::games::Game;
 use crate::scores::HighScores;
 
@@ -19,7 +19,7 @@ pub enum Tab {
     Frogger,
     Breakout,
     DinoRun,
-    Pinball,
+    SpaceInvaders,
     JezzBall,
     Asteroids,
     Booster,
@@ -28,7 +28,7 @@ pub enum Tab {
 
 impl Tab {
     pub fn all() -> &'static [Tab] {
-        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Asteroids, Tab::Booster, Tab::Beam]
+        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::SpaceInvaders, Tab::JezzBall, Tab::Asteroids, Tab::Booster, Tab::Beam]
     }
 
     pub fn title(&self) -> &str {
@@ -37,7 +37,7 @@ impl Tab {
             Tab::Frogger => " Frogger ",
             Tab::Breakout => " Breakout ",
             Tab::DinoRun => " Dino Run ",
-            Tab::Pinball => " Pinball ",
+            Tab::SpaceInvaders => " Invaders ",
             Tab::JezzBall => " JezzBall ",
             Tab::Asteroids => " Asteroids ",
             Tab::Booster => " Booster ",
@@ -51,7 +51,7 @@ impl Tab {
             Tab::Frogger => 1,
             Tab::Breakout => 2,
             Tab::DinoRun => 3,
-            Tab::Pinball => 4,
+            Tab::SpaceInvaders => 4,
             Tab::JezzBall => 5,
             Tab::Asteroids => 6,
             Tab::Booster => 7,
@@ -68,7 +68,7 @@ pub struct App {
     pub frogger: Frogger,
     pub breakout: Breakout,
     pub dino_run: DinoRun,
-    pub pinball: Pinball,
+    pub space_invaders: SpaceInvaders,
     pub jezzball: JezzBall,
     pub asteroids: Asteroids,
     pub booster: BoosterGame,
@@ -91,7 +91,7 @@ impl App {
             frogger: Frogger::new(),
             breakout: Breakout::new(),
             dino_run: DinoRun::new(),
-            pinball: Pinball::new(),
+            space_invaders: SpaceInvaders::new(),
             jezzball: JezzBall::new(),
             asteroids: Asteroids::new(),
             booster: BoosterGame::new(),
@@ -116,7 +116,7 @@ impl App {
             Tab::Frogger => self.frogger.update(),
             Tab::Breakout => self.breakout.update(),
             Tab::DinoRun => self.dino_run.update(),
-            Tab::Pinball => self.pinball.update(),
+            Tab::SpaceInvaders => self.space_invaders.update(),
             Tab::JezzBall => self.jezzball.update(),
             Tab::Asteroids => self.asteroids.update(),
             Tab::Booster => self.booster.update(),
@@ -131,7 +131,7 @@ impl App {
             (0, self.frogger.is_game_over(), self.frogger.get_score()),
             (1, self.breakout.is_game_over(), self.breakout.get_score()),
             (2, self.dino_run.is_game_over(), self.dino_run.get_score()),
-            (3, self.pinball.is_game_over(), self.pinball.get_score()),
+            (3, self.space_invaders.is_game_over(), self.space_invaders.get_score()),
             (4, self.jezzball.is_game_over(), self.jezzball.get_score()),
             (5, self.asteroids.is_game_over(), self.asteroids.get_score()),
             (6, self.booster.is_game_over(), self.booster.get_score()),
@@ -206,7 +206,7 @@ impl App {
                 KeyCode::Char('1') => { self.current_tab = Tab::Frogger; return; }
                 KeyCode::Char('2') => { self.current_tab = Tab::Breakout; return; }
                 KeyCode::Char('3') => { self.current_tab = Tab::DinoRun; return; }
-                KeyCode::Char('4') => { self.current_tab = Tab::Pinball; return; }
+                KeyCode::Char('4') => { self.current_tab = Tab::SpaceInvaders; return; }
                 KeyCode::Char('5') => { self.current_tab = Tab::JezzBall; return; }
                 KeyCode::Char('6') => { self.current_tab = Tab::Asteroids; return; }
                 KeyCode::Char('h') | KeyCode::Char('H') => {
@@ -246,7 +246,7 @@ impl App {
                         0 => Tab::Frogger,
                         1 => Tab::Breakout,
                         2 => Tab::DinoRun,
-                        3 => Tab::Pinball,
+                        3 => Tab::SpaceInvaders,
                         4 => Tab::JezzBall,
                         5 => Tab::Asteroids,
                         6 => Tab::Booster,
@@ -265,7 +265,7 @@ impl App {
             Tab::Frogger => self.frogger.handle_input(key),
             Tab::Breakout => self.breakout.handle_input(key),
             Tab::DinoRun => self.dino_run.handle_input(key),
-            Tab::Pinball => self.pinball.handle_input(key),
+            Tab::SpaceInvaders => self.space_invaders.handle_input(key),
             Tab::JezzBall => self.jezzball.handle_input(key),
             Tab::Asteroids => self.asteroids.handle_input(key),
             Tab::Booster => self.booster.handle_input(key),

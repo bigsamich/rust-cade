@@ -12,7 +12,7 @@ const ENTRY_SIZE: usize = NAME_LEN + 4;
 const FILE_SIZE: usize = 4 + TOTAL_SCORES * ENTRY_SIZE;
 
 pub const GAME_NAMES: [&str; NUM_GAMES] = [
-    "Frogger", "Breakout", "Dino Run", "Pinball", "JezzBall", "Asteroids", "Booster", "Beam",
+    "Frogger", "Breakout", "Dino Run", "Invaders", "JezzBall", "Asteroids", "Booster", "Beam",
 ];
 
 #[derive(Clone)]

@@ -5,7 +5,7 @@ pub mod breakout;
 pub mod dino_run;
 pub mod frogger;
 pub mod jezzball;
-pub mod pinball;
+pub mod space_invaders;
 
 use crossterm::event::KeyEvent;
 use ratatui::prelude::*;
