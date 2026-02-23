@@ -2,6 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
+use std::collections::HashMap;
+
 use crate::games::Game;
 
 const MAX_BULLETS: usize = 8;
@@ -23,9 +25,17 @@ enum AsteroidSize {
 impl AsteroidSize {
     fn radius(&self) -> f32 {
         match self {
-            AsteroidSize::Large => 3.0,
-            AsteroidSize::Medium => 1.8,
-            AsteroidSize::Small => 0.9,
+            AsteroidSize::Large => 5.0,
+            AsteroidSize::Medium => 3.0,
+            AsteroidSize::Small => 1.5,
+        }
+    }
+
+    fn num_verts(&self) -> usize {
+        match self {
+            AsteroidSize::Large => 11,
+            AsteroidSize::Medium => 9,
+            AsteroidSize::Small => 7,
         }
     }
 
@@ -42,6 +52,27 @@ impl AsteroidSize {
             AsteroidSize::Large => Some(AsteroidSize::Medium),
             AsteroidSize::Medium => Some(AsteroidSize::Small),
             AsteroidSize::Small => None,
+        }
+    }
+
+    fn color(&self, seed: u8) -> Color {
+        let v = seed % 3;
+        match self {
+            AsteroidSize::Large => match v {
+                0 => Color::Rgb(170, 150, 120),
+                1 => Color::Rgb(150, 140, 110),
+                _ => Color::Rgb(160, 145, 115),
+            },
+            AsteroidSize::Medium => match v {
+                0 => Color::Rgb(190, 170, 140),
+                1 => Color::Rgb(180, 165, 135),
+                _ => Color::Rgb(185, 168, 138),
+            },
+            AsteroidSize::Small => match v {
+                0 => Color::Rgb(210, 190, 160),
+                1 => Color::Rgb(200, 185, 155),
+                _ => Color::Rgb(205, 188, 158),
+            },
         }
     }
 }
@@ -120,7 +151,7 @@ impl Asteroids {
             field_height: fh,
             rng_state: 42,
         };
-        a.spawn_asteroids(4);
+        a.spawn_asteroids(2);
         a
     }
 
@@ -145,7 +176,8 @@ impl Asteroids {
                 _ => (self.field_width, self.rand_f32() * self.field_height),
             };
             let angle = self.rand_f32() * std::f32::consts::TAU;
-            let speed = 0.15 + self.rand_f32() * 0.25;
+            let base_speed = 0.1 + self.level as f32 * 0.02;
+            let speed = base_speed + self.rand_f32() * 0.15;
             let seed = (self.cheap_rand() % 256) as u8;
             self.asteroids.push(Asteroid {
                 x,
@@ -181,7 +213,6 @@ impl Asteroids {
             self.ship_vy += self.ship_angle.sin() * THRUST_ACCEL;
         }
 
-        // Clamp max speed
         let speed = (self.ship_vx * self.ship_vx + self.ship_vy * self.ship_vy).sqrt();
         if speed > 1.5 {
             self.ship_vx = self.ship_vx / speed * 1.5;
@@ -202,7 +233,6 @@ impl Asteroids {
             self.invuln_timer -= 1;
         }
 
-        // Shooting
         if self.fire_cooldown > 0 {
             self.fire_cooldown -= 1;
         }
@@ -222,7 +252,6 @@ impl Asteroids {
         for bullet in &mut self.bullets {
             bullet.x += bullet.vx;
             bullet.y += bullet.vy;
-            // Wrap bullets
             if bullet.x < 0.0 { bullet.x += self.field_width; }
             if bullet.x >= self.field_width { bullet.x -= self.field_width; }
             if bullet.y < 0.0 { bullet.y += self.field_height; }
@@ -233,19 +262,19 @@ impl Asteroids {
     }
 
     fn update_asteroids(&mut self) {
+        let margin = 8.0;
         for asteroid in &mut self.asteroids {
             asteroid.x += asteroid.vx;
             asteroid.y += asteroid.vy;
-            if asteroid.x < -4.0 { asteroid.x += self.field_width + 8.0; }
-            if asteroid.x >= self.field_width + 4.0 { asteroid.x -= self.field_width + 8.0; }
-            if asteroid.y < -4.0 { asteroid.y += self.field_height + 8.0; }
-            if asteroid.y >= self.field_height + 4.0 { asteroid.y -= self.field_height + 8.0; }
+            if asteroid.x < -margin { asteroid.x += self.field_width + margin * 2.0; }
+            if asteroid.x >= self.field_width + margin { asteroid.x -= self.field_width + margin * 2.0; }
+            if asteroid.y < -margin { asteroid.y += self.field_height + margin * 2.0; }
+            if asteroid.y >= self.field_height + margin { asteroid.y -= self.field_height + margin * 2.0; }
         }
     }
 
     fn check_collisions(&mut self) {
-        // Bullet-asteroid collisions — collect hits first, then mutate
-        let mut hits: Vec<(usize, usize, f32, f32, AsteroidSize)> = Vec::new(); // (bullet_idx, asteroid_idx, ax, ay, size)
+        let mut hits: Vec<(usize, usize, f32, f32, AsteroidSize)> = Vec::new();
         let mut bullets_to_remove: Vec<usize> = Vec::new();
         let mut asteroids_to_remove: Vec<usize> = Vec::new();
 
@@ -255,7 +284,7 @@ impl Asteroids {
                 let dx = bullet.x - asteroid.x;
                 let dy = bullet.y - asteroid.y;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist < asteroid.size.radius() + 0.5 {
+                if dist < asteroid.size.radius() {
                     self.score += asteroid.size.points();
                     bullets_to_remove.push(bi);
                     asteroids_to_remove.push(ai);
@@ -265,25 +294,22 @@ impl Asteroids {
             }
         }
 
-        // Now spawn split asteroids using mutable self for RNG
         let mut new_asteroids: Vec<Asteroid> = Vec::new();
         for &(_, _, ax, ay, size) in &hits {
             if let Some(new_size) = size.split() {
                 let spread_angle = self.rand_f32() * std::f32::consts::TAU;
-                let speed = 0.2 + self.rand_f32() * 0.3;
+                let speed = 0.2 + self.rand_f32() * 0.3 + self.level as f32 * 0.02;
                 let seed1 = (self.cheap_rand() % 256) as u8;
                 let seed2 = (self.cheap_rand() % 256) as u8;
                 new_asteroids.push(Asteroid {
-                    x: ax,
-                    y: ay,
+                    x: ax, y: ay,
                     vx: spread_angle.cos() * speed,
                     vy: spread_angle.sin() * speed,
                     size: new_size,
                     shape_seed: seed1,
                 });
                 new_asteroids.push(Asteroid {
-                    x: ax,
-                    y: ay,
+                    x: ax, y: ay,
                     vx: -spread_angle.cos() * speed,
                     vy: -spread_angle.sin() * speed,
                     size: new_size,
@@ -292,30 +318,25 @@ impl Asteroids {
             }
         }
 
-        // Remove hit bullets and asteroids (reverse order to maintain indices)
         bullets_to_remove.sort_unstable();
         bullets_to_remove.dedup();
         for &i in bullets_to_remove.iter().rev() {
-            if i < self.bullets.len() {
-                self.bullets.remove(i);
-            }
+            if i < self.bullets.len() { self.bullets.remove(i); }
         }
         asteroids_to_remove.sort_unstable();
         asteroids_to_remove.dedup();
         for &i in asteroids_to_remove.iter().rev() {
-            if i < self.asteroids.len() {
-                self.asteroids.remove(i);
-            }
+            if i < self.asteroids.len() { self.asteroids.remove(i); }
         }
         self.asteroids.extend(new_asteroids);
 
-        // Ship-asteroid collisions (only if not invulnerable)
+        // Ship-asteroid collisions
         if self.invuln_timer == 0 {
             for asteroid in &self.asteroids {
                 let dx = self.ship_x - asteroid.x;
                 let dy = self.ship_y - asteroid.y;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist < asteroid.size.radius() + 1.0 {
+                if dist < asteroid.size.radius() + 1.2 {
                     self.lives = self.lives.saturating_sub(1);
                     if self.lives == 0 {
                         self.game_over = true;
@@ -323,7 +344,6 @@ impl Asteroids {
                             self.high_score = self.score;
                         }
                     } else {
-                        // Respawn in center
                         self.ship_x = self.field_width / 2.0;
                         self.ship_y = self.field_height / 2.0;
                         self.ship_vx = 0.0;
@@ -335,71 +355,17 @@ impl Asteroids {
             }
         }
 
-        // Check level complete
+        // Level complete
         if self.asteroids.is_empty() && !self.game_over {
             self.level += 1;
-            let count = (3 + self.level).min(12) as usize;
+            let count = (1 + self.level).min(8) as usize;
             self.spawn_asteroids(count);
             self.invuln_timer = SHIP_INVULN_TICKS;
         }
     }
 
-    /// Return the ship triangle points (nose, left wing, right wing) in field coords.
-    fn ship_points(&self) -> [(f32, f32); 5] {
-        let a = self.ship_angle;
-        let nose_len = 3.0;
-        let wing_len = 2.2;
-        let notch_len = 1.2;
-        let wing_angle = 2.5;
-        let nose = (
-            self.ship_x + a.cos() * nose_len,
-            self.ship_y + a.sin() * nose_len,
-        );
-        let left = (
-            self.ship_x + (a + std::f32::consts::PI - wing_angle / 2.0).cos() * wing_len,
-            self.ship_y + (a + std::f32::consts::PI - wing_angle / 2.0).sin() * wing_len,
-        );
-        let right = (
-            self.ship_x + (a + std::f32::consts::PI + wing_angle / 2.0).cos() * wing_len,
-            self.ship_y + (a + std::f32::consts::PI + wing_angle / 2.0).sin() * wing_len,
-        );
-        // Rear notch (indent behind center for classic asteroids look)
-        let notch = (
-            self.ship_x + (a + std::f32::consts::PI).cos() * notch_len,
-            self.ship_y + (a + std::f32::consts::PI).sin() * notch_len,
-        );
-        let center = (self.ship_x, self.ship_y);
-        [nose, left, notch, right, center]
-    }
+    // ── Braille rendering helpers ──────────────────────────────────────
 
-    /// Bresenham's line rasterization.
-    fn line_cells(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
-        let mut cells = Vec::new();
-        let dx = (x1 - x0).abs();
-        let dy = -(y1 - y0).abs();
-        let sx = if x0 < x1 { 1 } else { -1 };
-        let sy = if y0 < y1 { 1 } else { -1 };
-        let mut err = dx + dy;
-        let mut cx = x0;
-        let mut cy = y0;
-        loop {
-            cells.push((cx, cy));
-            if cx == x1 && cy == y1 { break; }
-            let e2 = 2 * err;
-            if e2 >= dy {
-                err += dy;
-                cx += sx;
-            }
-            if e2 <= dx {
-                err += dx;
-                cy += sy;
-            }
-        }
-        cells
-    }
-
-    /// Convert a braille sub-pixel position to its bit mask.
-    /// Each terminal cell is a 2-wide x 4-tall braille grid.
     fn braille_bit(sub_x: usize, sub_y: usize) -> u8 {
         match (sub_x, sub_y) {
             (0, 0) => 0x01,
@@ -414,232 +380,226 @@ impl Asteroids {
         }
     }
 
-    /// Render the ship into the grid using braille characters for smooth sub-cell resolution.
-    fn render_ship_braille(
-        &self,
-        grid: &mut [Vec<(char, Style)>],
-        w: usize,
-        h: usize,
-        bg: Color,
-    ) {
-        if self.game_over { return; }
-        let visible = self.invuln_timer == 0 || (self.tick % 4) < 2;
-        if !visible { return; }
+    fn line_cells(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
+        let mut cells = Vec::new();
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+        let mut cx = x0;
+        let mut cy = y0;
+        loop {
+            cells.push((cx, cy));
+            if cx == x1 && cy == y1 { break; }
+            let e2 = 2 * err;
+            if e2 >= dy { err += dy; cx += sx; }
+            if e2 <= dx { err += dx; cy += sy; }
+        }
+        cells
+    }
 
-        // Braille pixel resolution: 2x horizontal, 4x vertical per terminal cell
+    /// Generate irregular polygon vertices for an asteroid using its seed.
+    fn asteroid_verts(cx: f32, cy: f32, size: AsteroidSize, seed: u8) -> Vec<(f32, f32)> {
+        let n = size.num_verts();
+        let r = size.radius();
+        let mut verts = Vec::with_capacity(n);
+        // Use seed to create per-vertex radius variation
+        let mut s = seed as u32;
+        for i in 0..n {
+            let angle = (i as f32 / n as f32) * std::f32::consts::TAU;
+            // Simple hash for variation per vertex
+            s = s.wrapping_mul(1103515245).wrapping_add(12345);
+            let variation = 0.7 + ((s >> 16) % 300) as f32 / 1000.0; // 0.7 - 1.0
+            let vr = r * variation;
+            verts.push((cx + angle.cos() * vr, cy + angle.sin() * vr));
+        }
+        verts
+    }
+
+    /// Set a braille dot in the map, with bounds checking.
+    fn set_braille_dot(map: &mut HashMap<(usize, usize), u8>, bx: i32, by: i32, bw: i32, bh: i32) {
+        if bx < 0 || by < 0 || bx >= bw || by >= bh { return; }
+        let cx = bx as usize / 2;
+        let cy = by as usize / 4;
+        let sx = bx as usize % 2;
+        let sy = by as usize % 4;
+        *map.entry((cx, cy)).or_insert(0) |= Self::braille_bit(sx, sy);
+    }
+
+    /// Write a braille map layer onto the grid with a given color.
+    fn write_braille_layer(
+        grid: &mut [Vec<(char, Style)>],
+        map: &HashMap<(usize, usize), u8>,
+        w: usize, h: usize,
+        color: Color, bg: Color, bold: bool,
+    ) {
+        for (&(cx, cy), &bits) in map {
+            if cx < w && cy < h && bits != 0 {
+                let ch = char::from_u32(0x2800 + bits as u32).unwrap_or(' ');
+                let mut style = Style::default().fg(color).bg(bg);
+                if bold { style = style.add_modifier(Modifier::BOLD); }
+                // Merge with existing braille in this cell
+                let existing = &grid[cy][cx];
+                if existing.0 as u32 >= 0x2800 && (existing.0 as u32) < 0x2900 {
+                    // Same-color merge: combine bits
+                    let old_bits = existing.0 as u32 - 0x2800;
+                    let merged = old_bits as u8 | bits;
+                    let merged_ch = char::from_u32(0x2800 + merged as u32).unwrap_or(ch);
+                    grid[cy][cx] = (merged_ch, style);
+                } else {
+                    grid[cy][cx] = (ch, style);
+                }
+            }
+        }
+    }
+
+    /// Ship triangle: nose, left wing, notch, right wing.
+    fn ship_points(&self) -> [(f32, f32); 4] {
+        let a = self.ship_angle;
+        let nose_len = 3.0;
+        let wing_len = 2.2;
+        let notch_len = 1.2;
+        let wing_angle = 2.5;
+        [
+            (self.ship_x + a.cos() * nose_len,
+             self.ship_y + a.sin() * nose_len),
+            (self.ship_x + (a + std::f32::consts::PI - wing_angle / 2.0).cos() * wing_len,
+             self.ship_y + (a + std::f32::consts::PI - wing_angle / 2.0).sin() * wing_len),
+            (self.ship_x + (a + std::f32::consts::PI).cos() * notch_len,
+             self.ship_y + (a + std::f32::consts::PI).sin() * notch_len),
+            (self.ship_x + (a + std::f32::consts::PI + wing_angle / 2.0).cos() * wing_len,
+             self.ship_y + (a + std::f32::consts::PI + wing_angle / 2.0).sin() * wing_len),
+        ]
+    }
+
+    // ── Main render ────────────────────────────────────────────────────
+
+    fn render_field(&self, width: usize, height: usize) -> Vec<Line<'static>> {
+        let w = width;
+        let h = height;
         let bw = (w * 2) as i32;
         let bh = (h * 4) as i32;
         let bsx = bw as f32 / self.field_width;
         let bsy = bh as f32 / self.field_height;
 
-        let [nose, left, notch, right, _center] = self.ship_points();
+        let bg = Color::Rgb(5, 5, 15);
+        let mut grid: Vec<Vec<(char, Style)>> =
+            vec![vec![(' ', Style::default().bg(bg)); w]; h];
 
-        let to_bp = |fx: f32, fy: f32| -> (i32, i32) {
-            ((fx * bsx) as i32, (fy * bsy) as i32)
-        };
-        let (nx, ny) = to_bp(nose.0, nose.1);
-        let (lx, ly) = to_bp(left.0, left.1);
-        let (rx, ry) = to_bp(right.0, right.1);
-        let (mx, my) = to_bp(notch.0, notch.1);
-
-        // Accumulate braille bits per terminal cell
-        let mut braille: std::collections::HashMap<(usize, usize), u8> = std::collections::HashMap::new();
-
-        let mut set_dot = |bx: i32, by: i32| {
-            if bx < 0 || by < 0 || bx >= bw || by >= bh { return; }
-            let cx = bx as usize / 2;
-            let cy = by as usize / 4;
-            let sx = bx as usize % 2;
-            let sy = by as usize % 4;
-            *braille.entry((cx, cy)).or_insert(0) |= Self::braille_bit(sx, sy);
-        };
-
-        // Draw ship outline: nose -> left -> notch -> right -> nose
-        for &(x0, y0, x1, y1) in &[
-            (nx, ny, lx, ly),
-            (lx, ly, mx, my),
-            (mx, my, rx, ry),
-            (rx, ry, nx, ny),
-        ] {
-            for (px, py) in Self::line_cells(x0, y0, x1, y1) {
-                set_dot(px, py);
-            }
-        }
-
-        let ship_color = if self.thrusting {
-            Color::Rgb(100, 230, 255)
-        } else {
-            Color::Rgb(80, 255, 140)
-        };
-
-        // Write braille chars to grid
-        for (&(cx, cy), &bits) in &braille {
-            if cx < w && cy < h && bits != 0 {
-                let ch = char::from_u32(0x2800 + bits as u32).unwrap_or(' ');
-                grid[cy][cx] = (ch, Style::default().fg(ship_color).bg(bg).add_modifier(Modifier::BOLD));
-            }
-        }
-
-        // Thrust exhaust — also in braille
-        if self.thrusting {
-            let mut flame_braille: std::collections::HashMap<(usize, usize), u8> = std::collections::HashMap::new();
-            let a = self.ship_angle + std::f32::consts::PI;
-            for i in 0..8 {
-                let dist = 2.0 + i as f32 * 0.5;
-                let spread = (i as f32 * 0.15) * if i % 2 == 0 { 1.0 } else { -1.0 };
-                let fx = self.ship_x + (a + spread).cos() * dist;
-                let fy = self.ship_y + (a + spread).sin() * dist;
-                let bx = (fx * bsx) as i32;
-                let by = (fy * bsy) as i32;
-                if bx >= 0 && by >= 0 && bx < bw && by < bh {
-                    let cx = bx as usize / 2;
-                    let cy = by as usize / 4;
-                    let sx = bx as usize % 2;
-                    let sy = by as usize % 4;
-                    *flame_braille.entry((cx, cy)).or_insert(0) |= Self::braille_bit(sx, sy);
+        // Sparse background stars (regular chars, not braille)
+        for yi in 0..h {
+            for xi in 0..w {
+                let hash = ((xi * 7 + yi * 13 + 37) * 31) % 250;
+                if hash < 2 {
+                    let b = 35 + (hash as u8) * 15;
+                    grid[yi][xi] = ('.', Style::default().fg(Color::Rgb(b, b, b + 8)).bg(bg));
                 }
             }
-            for (&(cx, cy), &bits) in &flame_braille {
-                if cx < w && cy < h && bits != 0 {
-                    // Don't overwrite ship cells
-                    if braille.contains_key(&(cx, cy)) { continue; }
-                    let ch = char::from_u32(0x2800 + bits as u32).unwrap_or(' ');
+        }
+
+        // ── Asteroids (braille polygons) ───────────────────────────────
+        for asteroid in &self.asteroids {
+            let verts = Self::asteroid_verts(asteroid.x, asteroid.y, asteroid.size, asteroid.shape_seed);
+            let color = asteroid.size.color(asteroid.shape_seed);
+            let mut amap: HashMap<(usize, usize), u8> = HashMap::new();
+
+            // Draw polygon outline
+            let n = verts.len();
+            for i in 0..n {
+                let (x0, y0) = verts[i];
+                let (x1, y1) = verts[(i + 1) % n];
+                let bx0 = (x0 * bsx) as i32;
+                let by0 = (y0 * bsy) as i32;
+                let bx1 = (x1 * bsx) as i32;
+                let by1 = (y1 * bsy) as i32;
+                for (px, py) in Self::line_cells(bx0, by0, bx1, by1) {
+                    Self::set_braille_dot(&mut amap, px, py, bw, bh);
+                }
+            }
+
+            Self::write_braille_layer(&mut grid, &amap, w, h, color, bg, false);
+        }
+
+        // ── Bullets (braille dots with short trail) ────────────────────
+        for bullet in &self.bullets {
+            let mut bmap: HashMap<(usize, usize), u8> = HashMap::new();
+            let brightness = if bullet.life > BULLET_LIFETIME / 2 { 255 } else { 180 };
+            let color = Color::Rgb(brightness, brightness, 80);
+
+            // Head dot (2x2 braille pixels for visibility)
+            let bx = (bullet.x * bsx) as i32;
+            let by = (bullet.y * bsy) as i32;
+            for &(dx, dy) in &[(0, 0), (1, 0), (0, 1), (1, 1)] {
+                Self::set_braille_dot(&mut bmap, bx + dx, by + dy, bw, bh);
+            }
+
+            // Trail dot
+            let tx = ((bullet.x - bullet.vx * 1.5) * bsx) as i32;
+            let ty = ((bullet.y - bullet.vy * 1.5) * bsy) as i32;
+            Self::set_braille_dot(&mut bmap, tx, ty, bw, bh);
+
+            Self::write_braille_layer(&mut grid, &bmap, w, h, color, bg, true);
+        }
+
+        // ── Ship (braille triangle) ────────────────────────────────────
+        if !self.game_over {
+            let visible = self.invuln_timer == 0 || (self.tick % 4) < 2;
+            if visible {
+                let pts = self.ship_points();
+                let ship_color = if self.thrusting {
+                    Color::Rgb(100, 230, 255)
+                } else {
+                    Color::Rgb(80, 255, 140)
+                };
+
+                let mut smap: HashMap<(usize, usize), u8> = HashMap::new();
+                let to_bp = |fx: f32, fy: f32| -> (i32, i32) {
+                    ((fx * bsx) as i32, (fy * bsy) as i32)
+                };
+                let bp: Vec<(i32, i32)> = pts.iter().map(|&(x, y)| to_bp(x, y)).collect();
+
+                // Outline: nose->left->notch->right->nose
+                let edges = [(0,1), (1,2), (2,3), (3,0)];
+                for &(a, b) in &edges {
+                    for (px, py) in Self::line_cells(bp[a].0, bp[a].1, bp[b].0, bp[b].1) {
+                        Self::set_braille_dot(&mut smap, px, py, bw, bh);
+                    }
+                }
+
+                Self::write_braille_layer(&mut grid, &smap, w, h, ship_color, bg, true);
+
+                // Thrust flame
+                if self.thrusting {
+                    let mut fmap: HashMap<(usize, usize), u8> = HashMap::new();
+                    let fa = self.ship_angle + std::f32::consts::PI;
+                    for i in 0..10 {
+                        let dist = 2.0 + i as f32 * 0.5;
+                        let spread = (i as f32 * 0.18) * if i % 2 == 0 { 1.0 } else { -1.0 };
+                        let fx = self.ship_x + (fa + spread).cos() * dist;
+                        let fy = self.ship_y + (fa + spread).sin() * dist;
+                        let fbx = (fx * bsx) as i32;
+                        let fby = (fy * bsy) as i32;
+                        Self::set_braille_dot(&mut fmap, fbx, fby, bw, bh);
+                        // Extra width dot
+                        let perp = fa + std::f32::consts::FRAC_PI_2;
+                        let px2 = fx + perp.cos() * 0.3;
+                        let py2 = fy + perp.sin() * 0.3;
+                        Self::set_braille_dot(&mut fmap, (px2 * bsx) as i32, (py2 * bsy) as i32, bw, bh);
+                    }
                     let flicker = if self.tick % 3 == 0 {
                         Color::Rgb(255, 200, 60)
                     } else {
                         Color::Rgb(255, 130, 30)
                     };
-                    grid[cy][cx] = (ch, Style::default().fg(flicker).bg(bg));
+                    // Don't overwrite ship cells
+                    for key in smap.keys() {
+                        fmap.remove(key);
+                    }
+                    Self::write_braille_layer(&mut grid, &fmap, w, h, flicker, bg, false);
                 }
             }
         }
-    }
-
-    fn asteroid_char(size: AsteroidSize) -> char {
-        match size {
-            AsteroidSize::Large => '@',
-            AsteroidSize::Medium => 'O',
-            AsteroidSize::Small => 'o',
-        }
-    }
-
-    fn asteroid_color(size: AsteroidSize, seed: u8) -> Color {
-        let variant = seed % 3;
-        match size {
-            AsteroidSize::Large => match variant {
-                0 => Color::Rgb(160, 140, 120),
-                1 => Color::Rgb(140, 130, 110),
-                _ => Color::Rgb(150, 135, 115),
-            },
-            AsteroidSize::Medium => match variant {
-                0 => Color::Rgb(180, 160, 140),
-                1 => Color::Rgb(170, 155, 130),
-                _ => Color::Rgb(175, 158, 135),
-            },
-            AsteroidSize::Small => match variant {
-                0 => Color::Rgb(200, 180, 160),
-                1 => Color::Rgb(190, 175, 155),
-                _ => Color::Rgb(195, 178, 158),
-            },
-        }
-    }
-
-    fn render_field(&self, width: usize, height: usize) -> Vec<Line<'static>> {
-        let w = width;
-        let h = height;
-
-        let sx = w as f32 / self.field_width;
-        let sy = h as f32 / self.field_height;
-
-        let bg = Color::Rgb(5, 5, 15);
-        let mut grid: Vec<Vec<(char, Style)>> =
-            vec![vec![(' ', Style::default().bg(bg)); w]; h];
-
-        // Sprinkle some stars in background based on position
-        for sy_i in 0..h {
-            for sx_i in 0..w {
-                let hash = ((sx_i * 7 + sy_i * 13 + 37) * 31) % 200;
-                if hash < 2 {
-                    let brightness = 40 + (hash as u8) * 20;
-                    grid[sy_i][sx_i] = ('.', Style::default()
-                        .fg(Color::Rgb(brightness, brightness, brightness + 10))
-                        .bg(bg));
-                } else if hash == 3 {
-                    grid[sy_i][sx_i] = ('+', Style::default()
-                        .fg(Color::Rgb(30, 30, 40))
-                        .bg(bg));
-                }
-            }
-        }
-
-        // Draw asteroids
-        for asteroid in &self.asteroids {
-            let ax = (asteroid.x * sx) as usize;
-            let ay = (asteroid.y * sy) as usize;
-            let r = (asteroid.size.radius() * sx) as usize;
-            let ch = Self::asteroid_char(asteroid.size);
-            let color = Self::asteroid_color(asteroid.size, asteroid.shape_seed);
-
-            match asteroid.size {
-                AsteroidSize::Large => {
-                    // Draw a larger shape
-                    for dy in 0..=r.min(3) {
-                        for dx in 0..=r.min(4) {
-                            let gx = ax.wrapping_add(dx).wrapping_sub(r / 2);
-                            let gy = ay.wrapping_add(dy).wrapping_sub(r / 2);
-                            if gx < w && gy < h {
-                                // Make it roughly circular
-                                let ddx = dx as f32 - r as f32 / 2.0;
-                                let ddy = dy as f32 - r as f32 / 2.0;
-                                if (ddx * ddx + ddy * ddy).sqrt() <= r as f32 * 0.8 {
-                                    let edge = (ddx * ddx + ddy * ddy).sqrt() > r as f32 * 0.5;
-                                    let c = if edge { '.' } else { ch };
-                                    grid[gy][gx] = (c, Style::default().fg(color).bg(bg));
-                                }
-                            }
-                        }
-                    }
-                    // Always draw center
-                    if ax < w && ay < h {
-                        grid[ay][ax] = (ch, Style::default().fg(color).bg(bg).add_modifier(Modifier::BOLD));
-                    }
-                }
-                AsteroidSize::Medium => {
-                    for &(dx, dy) in &[(0i32, 0i32), (-1, 0), (1, 0), (0, -1), (0, 1)] {
-                        let gx = (ax as i32 + dx) as usize;
-                        let gy = (ay as i32 + dy) as usize;
-                        if gx < w && gy < h {
-                            let c = if dx == 0 && dy == 0 { ch } else { '.' };
-                            grid[gy][gx] = (c, Style::default().fg(color).bg(bg));
-                        }
-                    }
-                    if ax < w && ay < h {
-                        grid[ay][ax] = (ch, Style::default().fg(color).bg(bg).add_modifier(Modifier::BOLD));
-                    }
-                }
-                AsteroidSize::Small => {
-                    if ax < w && ay < h {
-                        grid[ay][ax] = (ch, Style::default().fg(color).bg(bg).add_modifier(Modifier::BOLD));
-                    }
-                }
-            }
-        }
-
-        // Draw bullets
-        for bullet in &self.bullets {
-            let bx = (bullet.x * sx) as usize;
-            let by = (bullet.y * sy) as usize;
-            if bx < w && by < h {
-                let brightness = if bullet.life > BULLET_LIFETIME / 2 { 255 } else { 180 };
-                grid[by][bx] = ('*', Style::default()
-                    .fg(Color::Rgb(brightness, brightness, 100))
-                    .bg(bg)
-                    .add_modifier(Modifier::BOLD));
-            }
-        }
-
-        // Draw ship using braille characters for smooth rotation
-        self.render_ship_braille(&mut grid, w, h, bg);
 
         grid.into_iter()
             .map(|row| {
@@ -667,7 +627,6 @@ impl Game for Asteroids {
         self.update_bullets();
         self.update_asteroids();
         self.check_collisions();
-        // Clear held states after processing (TUI has no key-up events)
         self.thrusting = false;
         self.rotating_left = false;
         self.rotating_right = false;
@@ -702,8 +661,6 @@ impl Game for Asteroids {
     }
 
     fn render(&mut self, frame: &mut Frame, area: Rect) {
-        // Clear held-down states each frame since TUI gets key press events, not hold
-        // We set them true on press and clear after one update cycle
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -714,7 +671,6 @@ impl Game for Asteroids {
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        // Update dimensions dynamically
         let new_fw = inner.width as f32;
         let new_fh = (inner.height.saturating_sub(2)) as f32;
         if (new_fw - self.field_width).abs() > 1.0 || (new_fh - self.field_height).abs() > 1.0 {
@@ -810,7 +766,6 @@ impl Game for Asteroids {
             ]));
             frame.render_widget(help, chunks[2]);
         }
-
     }
 
     fn get_score(&self) -> u32 { self.score }
