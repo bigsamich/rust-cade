@@ -22,13 +22,14 @@ struct GameTile {
     border_color: Color,
 }
 
-const GAME_TILES: [GameTile; 6] = [
+const GAME_TILES: [GameTile; 7] = [
     GameTile { key: "1", icon: "🐸", name: "Frogger", desc: "Cross the road\nand river!", color: Color::Rgb(80, 220, 80), border_color: Color::Rgb(40, 120, 40) },
     GameTile { key: "2", icon: "🧱", name: "Breakout", desc: "Smash bricks\nwith the ball!", color: Color::Rgb(220, 80, 80), border_color: Color::Rgb(120, 40, 40) },
     GameTile { key: "3", icon: "🦖", name: "Dino Run", desc: "Jump obstacles\nin endless run!", color: Color::Rgb(200, 120, 255), border_color: Color::Rgb(100, 60, 140) },
     GameTile { key: "4", icon: "🎱", name: "Pinball", desc: "Hit bumpers\nfor combos!", color: Color::Rgb(255, 200, 80), border_color: Color::Rgb(140, 100, 40) },
     GameTile { key: "5", icon: "🟦", name: "JezzBall", desc: "Build walls to\ntrap the balls!", color: Color::Rgb(100, 180, 255), border_color: Color::Rgb(50, 90, 140) },
     GameTile { key: "6", icon: "⚛", name: "Booster", desc: "Steer particles\naround the ring!", color: Color::Rgb(120, 200, 255), border_color: Color::Rgb(50, 100, 140) },
+    GameTile { key: "7", icon: "💫", name: "Beam", desc: "Tune the ring\nfor 5 orbits!", color: Color::Rgb(255, 160, 60), border_color: Color::Rgb(140, 80, 30) },
 ];
 
 fn render_game_tile(frame: &mut Frame, area: Rect, tile: &GameTile, selected: bool) {
@@ -252,6 +253,59 @@ fn game_controls(game_idx: usize) -> Vec<Line<'static>> {
                 Span::styled("Bump X / Y only", Style::default().fg(Color::Rgb(140, 140, 140))),
             ]),
         ],
+        6 => vec![ // Beam
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  💫 Beam", Style::default().fg(Color::Rgb(255, 160, 60)).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Tune magnets, steer a beam", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(vec![
+                Span::styled("  5 turns, lowest score wins!", Style::default().fg(Color::Rgb(100, 100, 120))),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("    ↑ / ↓            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Select magnet", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    ← / →            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Adjust power", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    [ / ]            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Prev/next section", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    + / -            ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Step size", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    0-9              ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Ramp point", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    B                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Bump mode (3/4/5/off)", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    C                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Copy section to all", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    Z                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Zero magnet", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    D                ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Difficulty toggle", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+            Line::from(vec![
+                Span::styled("    W/S  E/Q         ", Style::default().fg(Color::Rgb(80, 200, 255))),
+                Span::styled("Bump X / Y only", Style::default().fg(Color::Rgb(140, 140, 140))),
+            ]),
+        ],
         _ => vec![],
     }
 }
@@ -296,7 +350,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
     let games_inner = games_block.inner(chunks[2]);
     frame.render_widget(games_block, chunks[2]);
 
-    // 2 rows of 3 tiles
+    // 2 rows of tiles: 4 on top, 3 on bottom
     let tile_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -308,26 +362,28 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
     let top_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
         ])
         .split(tile_rows[0]);
 
     let bot_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 4),
         ])
         .split(tile_rows[1]);
 
-    for i in 0..3 {
+    for i in 0..4 {
         render_game_tile(frame, top_cols[i], &GAME_TILES[i], selected_game == i);
     }
     for i in 0..3 {
-        render_game_tile(frame, bot_cols[i], &GAME_TILES[i + 3], selected_game == i + 3);
+        render_game_tile(frame, bot_cols[i], &GAME_TILES[i + 4], selected_game == i + 4);
     }
 
     // Controls area: split horizontally - navigation left, game controls right
@@ -350,7 +406,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
             Span::styled("Switch tabs", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
-            Span::styled("    1-6              ", Style::default().fg(Color::Rgb(80, 200, 255))),
+            Span::styled("    1-7              ", Style::default().fg(Color::Rgb(80, 200, 255))),
             Span::styled("Launch game", Style::default().fg(Color::Rgb(140, 140, 140))),
         ]),
         Line::from(vec![
@@ -425,7 +481,7 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
 fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighScores) {
     // Center overlay
     let overlay_w = 50u16.min(area.width.saturating_sub(4));
-    let overlay_h = 22u16.min(area.height.saturating_sub(4));
+    let overlay_h = 26u16.min(area.height.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(overlay_w)) / 2;
     let y = area.y + (area.height.saturating_sub(overlay_h)) / 2;
     let overlay_area = Rect::new(x, y, overlay_w, overlay_h);
@@ -443,7 +499,7 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
     let inner = block.inner(overlay_area);
     frame.render_widget(block, overlay_area);
 
-    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "⚛"];
+    let icons = ["🐸", "🧱", "🦖", "🎱", "🟦", "⚛", "💫"];
     let colors = [
         Color::Rgb(80, 220, 80),
         Color::Rgb(220, 80, 80),
@@ -451,6 +507,7 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
         Color::Rgb(255, 200, 80),
         Color::Rgb(100, 180, 255),
         Color::Rgb(120, 200, 255),
+        Color::Rgb(255, 160, 60),
     ];
     let medal_colors = [
         Color::Rgb(255, 215, 0),   // Gold
@@ -461,7 +518,7 @@ fn render_high_scores_overlay(frame: &mut Frame, area: Rect, high_scores: &HighS
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    for game_idx in 0..6 {
+    for game_idx in 0..7 {
         let scores = high_scores.top_scores(game_idx);
         lines.push(Line::from(vec![
             Span::styled(format!("  {} ", icons[game_idx]), Style::default()),

@@ -1,5 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::games::beam::BeamGame;
 use crate::games::booster::BoosterGame;
 use crate::games::breakout::Breakout;
 use crate::games::dino_run::DinoRun;
@@ -20,11 +21,12 @@ pub enum Tab {
     Pinball,
     JezzBall,
     Booster,
+    Beam,
 }
 
 impl Tab {
     pub fn all() -> &'static [Tab] {
-        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Booster]
+        &[Tab::Home, Tab::Frogger, Tab::Breakout, Tab::DinoRun, Tab::Pinball, Tab::JezzBall, Tab::Booster, Tab::Beam]
     }
 
     pub fn title(&self) -> &str {
@@ -36,6 +38,7 @@ impl Tab {
             Tab::Pinball => " Pinball ",
             Tab::JezzBall => " JezzBall ",
             Tab::Booster => " Booster ",
+            Tab::Beam => " Beam ",
         }
     }
 
@@ -48,6 +51,7 @@ impl Tab {
             Tab::Pinball => 4,
             Tab::JezzBall => 5,
             Tab::Booster => 6,
+            Tab::Beam => 7,
         }
     }
 
@@ -56,13 +60,14 @@ impl Tab {
 pub struct App {
     pub should_quit: bool,
     pub current_tab: Tab,
-    pub selected_game: usize, // 0-5 for home screen game selection
+    pub selected_game: usize, // 0-6 for home screen game selection
     pub frogger: Frogger,
     pub breakout: Breakout,
     pub dino_run: DinoRun,
     pub pinball: Pinball,
     pub jezzball: JezzBall,
     pub booster: BoosterGame,
+    pub beam: BeamGame,
     pub high_scores: HighScores,
     pub show_high_scores: bool,
     // Name entry state
@@ -84,6 +89,7 @@ impl App {
             pinball: Pinball::new(),
             jezzball: JezzBall::new(),
             booster: BoosterGame::new(),
+            beam: BeamGame::new(),
             high_scores: HighScores::load(),
             show_high_scores: false,
             entering_name: false,
@@ -107,19 +113,21 @@ impl App {
             Tab::Pinball => self.pinball.update(),
             Tab::JezzBall => self.jezzball.update(),
             Tab::Booster => self.booster.update(),
+            Tab::Beam => self.beam.update(),
         }
         // Check for high scores when games end
         self.check_submit_scores();
     }
 
     fn check_submit_scores(&mut self) {
-        let games: [(usize, bool, u32); 6] = [
+        let games: [(usize, bool, u32); 7] = [
             (0, self.frogger.is_game_over(), self.frogger.get_score()),
             (1, self.breakout.is_game_over(), self.breakout.get_score()),
             (2, self.dino_run.is_game_over(), self.dino_run.get_score()),
             (3, self.pinball.is_game_over(), self.pinball.get_score()),
             (4, self.jezzball.is_game_over(), self.jezzball.get_score()),
             (5, self.booster.is_game_over(), self.booster.get_score()),
+            (6, self.beam.is_game_over(), self.beam.get_score()),
         ];
         for (idx, game_over, score) in games {
             if game_over && score > 0 && !self.high_scores.was_submitted(idx) {
@@ -197,21 +205,30 @@ impl App {
                     return;
                 }
                 KeyCode::Char('6') => { self.current_tab = Tab::Booster; return; }
-                // Arrow key navigation for game tile selection (2 rows x 3 cols)
+                KeyCode::Char('7') => { self.current_tab = Tab::Beam; return; }
+                // Arrow key navigation for game tile selection (2 rows: 4 + 3)
                 KeyCode::Right => {
-                    self.selected_game = (self.selected_game + 1) % 6;
+                    self.selected_game = (self.selected_game + 1) % 7;
                     return;
                 }
                 KeyCode::Left => {
-                    self.selected_game = (self.selected_game + 5) % 6;
+                    self.selected_game = (self.selected_game + 6) % 7;
                     return;
                 }
                 KeyCode::Down => {
-                    self.selected_game = (self.selected_game + 3) % 6;
+                    if self.selected_game < 4 {
+                        self.selected_game = (self.selected_game + 4).min(6);
+                    } else {
+                        self.selected_game -= 4;
+                    }
                     return;
                 }
                 KeyCode::Up => {
-                    self.selected_game = (self.selected_game + 3) % 6;
+                    if self.selected_game >= 4 {
+                        self.selected_game -= 4;
+                    } else {
+                        self.selected_game = (self.selected_game + 4).min(6);
+                    }
                     return;
                 }
                 // Enter launches the selected game
@@ -223,6 +240,7 @@ impl App {
                         3 => Tab::Pinball,
                         4 => Tab::JezzBall,
                         5 => Tab::Booster,
+                        6 => Tab::Beam,
                         _ => Tab::Home,
                     };
                     return;
@@ -240,6 +258,7 @@ impl App {
             Tab::Pinball => self.pinball.handle_input(key),
             Tab::JezzBall => self.jezzball.handle_input(key),
             Tab::Booster => self.booster.handle_input(key),
+            Tab::Beam => self.beam.handle_input(key),
         }
     }
 
