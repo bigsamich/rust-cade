@@ -498,7 +498,9 @@ pub fn render_home(frame: &mut Frame, area: Rect, selected_game: usize, show_hig
         Span::styled("v0.10.1", Style::default().fg(Color::Rgb(80, 80, 100))),
         Span::styled("  │  ", Style::default().fg(Color::Rgb(40, 40, 60))),
         Span::styled("H", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
-        Span::styled(" High Scores", Style::default().fg(Color::Rgb(100, 100, 130))),
+        Span::styled(" High Scores  ", Style::default().fg(Color::Rgb(100, 100, 130))),
+        Span::styled("?", Style::default().fg(Color::Rgb(255, 220, 80)).add_modifier(Modifier::BOLD)),
+        Span::styled(" Help", Style::default().fg(Color::Rgb(100, 100, 130))),
     ]))
     .alignment(Alignment::Center);
     frame.render_widget(footer, chunks[4]);

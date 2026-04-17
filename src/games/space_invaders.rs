@@ -289,7 +289,8 @@ impl SpaceInvaders {
                 let mut lowest: Option<usize> = None;
                 for (i, alien) in self.aliens.iter().enumerate() {
                     if !alien.alive { continue; }
-                    let acol = ((alien.x - 5.0) / ALIEN_H_SPACING).round() as usize;
+                    let start_x = (self.field_width - (ALIEN_COLS as f32 - 1.0) * ALIEN_H_SPACING) / 2.0;
+                    let acol = ((alien.x - start_x) / ALIEN_H_SPACING).round() as usize;
                     if acol == col {
                         if lowest.is_none() || alien.y > self.aliens[lowest.unwrap()].y {
                             lowest = Some(i);
@@ -796,7 +797,9 @@ impl Game for SpaceInvaders {
                 Span::styled("| ", Style::default().fg(Color::Rgb(60, 60, 60))),
                 Span::styled("R Restart ", Style::default().fg(Color::DarkGray)),
                 Span::styled("| ", Style::default().fg(Color::Rgb(60, 60, 60))),
-                Span::styled("Esc Menu", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc Menu ", Style::default().fg(Color::DarkGray)),
+                Span::styled("| ", Style::default().fg(Color::Rgb(60, 60, 60))),
+                Span::styled("? Help", Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[2]);
         }

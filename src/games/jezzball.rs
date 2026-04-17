@@ -720,7 +720,9 @@ impl Game for JezzBall {
                 Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
                 Span::styled("R Reset ", Style::default().fg(Color::DarkGray)),
                 Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
-                Span::styled("Esc Menu", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc Menu ", Style::default().fg(Color::DarkGray)),
+                Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
+                Span::styled("? Help", Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[2]);
         }

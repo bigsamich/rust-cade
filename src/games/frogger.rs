@@ -48,7 +48,7 @@ impl Frogger {
         let fw = 80;
         let mut f = Self {
             frog_x: fw / 2,
-            frog_y: 11,
+            frog_y: NUM_LANES - 1,
             lanes: Vec::new(),
             score: 0,
             high_score: 0,
@@ -139,7 +139,7 @@ impl Frogger {
                         self.score += 500;
                     }
                     self.frog_x = self.field_width / 2;
-                    self.frog_y = 11;
+                    self.frog_y = NUM_LANES - 1;
                 } else {
                     self.lose_life();
                 }
@@ -179,7 +179,7 @@ impl Frogger {
             }
         }
         self.frog_x = self.field_width / 2;
-        self.frog_y = 11;
+        self.frog_y = NUM_LANES - 1;
     }
 
     fn move_frog_with_log(&mut self) {
@@ -393,7 +393,7 @@ impl Game for Frogger {
                         }
                     }
                     KeyCode::Down => {
-                        if self.frog_y < 11 {
+                        if self.frog_y < NUM_LANES - 1 {
                             self.frog_y += 1;
                         }
                     }
@@ -433,9 +433,8 @@ impl Game for Frogger {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(1),
-                Constraint::Length(NUM_LANES as u16),
+                Constraint::Fill(1),
                 Constraint::Length(1),
-                Constraint::Min(0),
             ])
             .split(inner);
 
@@ -464,12 +463,25 @@ impl Game for Frogger {
         ]);
         frame.render_widget(Paragraph::new(status), chunks[0]);
 
-        // Game field
+        // Game field - scale lanes to fill available height
         let field_width = chunks[1].width as usize;
+        let available_height = chunks[1].height as usize;
+        let rows_per_lane = (available_height / NUM_LANES).max(1);
         let mut lines: Vec<Line> = Vec::new();
         for i in 0..NUM_LANES {
             if i < self.lanes.len() {
-                lines.push(self.render_lane(i, field_width));
+                let lane_line = self.render_lane(i, field_width);
+                for _ in 0..rows_per_lane {
+                    lines.push(lane_line.clone());
+                }
+            }
+        }
+        // Fill any remaining rows with the last lane style
+        while lines.len() < available_height {
+            if let Some(last) = lines.last().cloned() {
+                lines.push(last);
+            } else {
+                break;
             }
         }
         frame.render_widget(Paragraph::new(lines), chunks[1]);
@@ -500,7 +512,9 @@ impl Game for Frogger {
                 Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
                 Span::styled("R Restart ", Style::default().fg(Color::DarkGray)),
                 Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
-                Span::styled("Esc Menu", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc Menu ", Style::default().fg(Color::DarkGray)),
+                Span::styled("│ ", Style::default().fg(Color::Rgb(60, 60, 60))),
+                Span::styled("? Help", Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[2]);
         }

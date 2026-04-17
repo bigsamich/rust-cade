@@ -1535,8 +1535,6 @@ impl Game for BoosterGame {
                         } else {
                             let cell = self.selected_cell;
                             let ct = self.selected_corrector;
-                            self.adjust_corrector(cell, ct, 0.0);
-                            // Actually zero it
                             let corr = &mut self.correctors[cell];
                             match ct {
                                 CorrectorSelect::HTrim => corr.h_trim = 0.0,
@@ -1553,7 +1551,7 @@ impl Game for BoosterGame {
                         if self.rf_phase_deg < 90.0 {
                             self.rf_phase_deg = 180.0 - self.rf_phase_deg;
                         } else {
-                            self.rf_phase_deg = 180.0 - self.rf_phase_deg;
+                            self.rf_phase_deg = 180.0 - self.rf_phase_deg.max(90.0);
                         }
                         self.message = Some((
                             format!("RF phase: {:.0} deg", self.rf_phase_deg), 30, Color::Rgb(200, 180, 255),
@@ -2770,7 +2768,9 @@ impl BoosterGame {
                         Span::styled(".", Style::default().fg(Color::Rgb(255, 255, 100))),
                         Span::styled(format!(" {} ", self.sim_speed.label()), Style::default().fg(Color::DarkGray)),
                         Span::styled("R", Style::default().fg(Color::Rgb(255, 255, 100))),
-                        Span::styled(" Reset", Style::default().fg(Color::DarkGray)),
+                        Span::styled(" Reset ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("?", Style::default().fg(Color::Rgb(255, 255, 100))),
+                        Span::styled(" Help", Style::default().fg(Color::DarkGray)),
                     ]),
                 ]
             }

@@ -1102,8 +1102,9 @@ impl Game for BeamGame {
                         else if intensity > 0.35 { '▒' }
                         else { '░' };
                     let r = (60.0 + intensity * 140.0) as u8;
+                    let g = (20.0 + intensity * 40.0) as u8;
                     let b = (100.0 + intensity * 155.0) as u8;
-                    y_bar_chars[x] = (ch, Style::default().fg(Color::Rgb(r, 20, b)).bg(Color::Rgb(15, 15, 25)));
+                    y_bar_chars[x] = (ch, Style::default().fg(Color::Rgb(r, g, b)).bg(Color::Rgb(15, 15, 25)));
                 }
             }
             if beam_y_center < y_bar_w {
@@ -1595,7 +1596,7 @@ impl Game for BeamGame {
             // Bump mode help bar
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(" BUMP ", Style::default().fg(Color::Rgb(80, 255, 200)).add_modifier(Modifier::BOLD)),
-                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 0-9 Ramp │ Z Zero │ B Cycle/Exit │ +/- Step │ P │ Esc",
+                Span::styled("│ ↑↓ X+Y │ W/S X │ E/Q Y │ ←→ Shift │ 0-9 Ramp │ Z Zero │ B Cycle/Exit │ +/- Step │ P │ Esc │ ? Help",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[4]);
@@ -1603,7 +1604,7 @@ impl Game for BeamGame {
             let help = Paragraph::new(Line::from(vec![
                 Span::styled(if self.beam_running { " SPACE: running " } else { " SPACE: start " },
                     Style::default().fg(if self.beam_running { Color::Green } else { Color::Yellow })),
-                Span::styled("│ ↑↓ Mag │ ←→ Pow │ [] Sec │ 0-9 Ramp │ B Bump │ C Copy │ +/- Step │ Z Zero │ D Diff │ P │ Esc",
+                Span::styled("│ ↑↓ Mag │ ←→ Pow │ [] Sec │ 0-9 Ramp │ B Bump │ C Copy │ +/- Step │ Z Zero │ D Diff │ P │ Esc │ ? Help",
                     Style::default().fg(Color::DarkGray)),
             ]));
             frame.render_widget(help, chunks[4]);

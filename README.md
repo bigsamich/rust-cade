@@ -15,8 +15,10 @@ A TUI-based arcade game suite built with [Ratatui](https://github.com/ratatui/ra
 | **Frogger** | Navigate traffic and ride logs across 13 lanes to reach the goal pads. |
 | **Breakout** | Classic brick-breaking action with paddle, ball, colored bricks, lives, and increasing speed. |
 | **Dino Run** | Chrome-style endless runner — jump and duck to dodge cacti and birds as speed ramps up. |
-| **Pinball** | Terminal pinball with flippers, bumpers, spinners, and a multiball system. |
+| **Space Invaders** | Defend Earth from waves of aliens with shields, 3 alien types, and escalating difficulty. |
 | **JezzBall** | Launch growing walls to partition space and trap bouncing balls. Progress through levels with more balls. |
+| **Asteroids** | Pilot your ship through asteroid fields — shoot, split, and dodge rocks in deep space. |
+| **Booster** | Fermilab Booster synchrotron sim — accelerate protons from 400 MeV to 8 GeV, navigate transition crossing, and extract the beam. |
 | **Beam** | Particle beam simulation — tune magnets across 24 ring sections to keep a beam stable for 5 turns. Features bump mode, power supply ramps, and difficulty settings. |
 
 ## 📦 Installation
@@ -53,9 +55,10 @@ rustcade
 |-----|--------|
 | `Tab` / `Shift+Tab` | Switch between game tabs |
 | `Enter` | Start selected game |
-| `1`–`6` | Quick-launch a game by number |
+| `1`–`8` | Quick-launch a game by number |
 | `←` `→` `↑` `↓` | Navigate game tile grid on home screen |
 | `H` | Toggle high scores display |
+| `?` | Show help screen (scrollable with arrow keys) |
 | `Esc` | Return to menu from any game |
 | `Q` | Quit (from home screen) |
 | `Ctrl+C` | Force quit |
@@ -96,14 +99,12 @@ Every game shares these keys:
 | `Space` / `↑` / `Enter` | Start game / Jump |
 | `↓` | Duck (on ground) / Fast fall (in air) |
 
-### Pinball
+### Space Invaders
 
 | Key | Action |
 |-----|--------|
-| `←` / `A` | Left flipper |
-| `→` / `D` | Right flipper |
-| `Space` / `↓` | Launch ball (plunger) |
-| `T` | Tilt |
+| `←` / `→` | Move ship |
+| `Space` / `↑` | Fire (max 3 bullets) |
 
 ### JezzBall
 
@@ -113,6 +114,31 @@ Every game shares these keys:
 | `Space` / `Enter` | Place wall |
 | `Tab` | Toggle wall direction (horizontal / vertical) |
 | `Enter` / `Space` (level won) | Advance to next level |
+
+### Asteroids
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Rotate ship |
+| `↑` | Thrust forward |
+| `Space` | Fire |
+
+### Booster
+
+| Key | Action |
+|-----|--------|
+| `Space` | Inject beam |
+| `I` | Inject at custom X,Y coordinates |
+| `↑` / `↓` | Cycle corrector type |
+| `←` / `→` | Adjust selected corrector |
+| `[` / `]` | Navigate cells 0-23 |
+| `F` / `G` | Increase / Decrease RF voltage |
+| `T` | Toggle RF phase (for transition crossing) |
+| `J` / `K` | Increase / Decrease quad bus (MQAT) |
+| `M` / `N` | Increase / Decrease bend bus (MDAT) |
+| `B` | Toggle bump mode (3/4/5/off) |
+| `V` | Cycle display mode |
+| `.` | Cycle sim speed |
 
 ### Beam
 
@@ -127,28 +153,31 @@ Every game shares these keys:
 | `Z` | Zero selected magnet ramp value |
 | `X` | Zero all ramp values in current section |
 | `B` | Toggle bump mode |
+| `D` | Toggle difficulty (Easy/Hard) |
 | `Space` | Start beam |
 
 ## 🏗️ Project Structure
 
 ```
 src/
-├── main.rs          # Terminal setup & main loop
-├── app.rs           # Application state & input routing
-├── event.rs         # Async key/tick event handler (~30 FPS)
-├── scores.rs        # High score persistence
+├── main.rs              # Terminal setup & main loop
+├── app.rs               # Application state & input routing
+├── event.rs             # Async key/tick event handler (~60 FPS)
+├── scores.rs            # High score persistence
 ├── ui/
-│   ├── mod.rs       # Root UI renderer
-│   ├── home.rs      # Home screen
-│   └── tabs.rs      # Tab navigation bar
+│   ├── mod.rs           # Root UI renderer & help overlay
+│   ├── home.rs          # Home screen
+│   └── tabs.rs          # Tab navigation bar
 └── games/
-    ├── mod.rs       # Game trait & registry
-    ├── beam.rs      # Beam simulation
-    ├── breakout.rs  # Breakout
-    ├── dino_run.rs  # Dino Run
-    ├── frogger.rs   # Frogger
-    ├── jezzball.rs  # JezzBall
-    └── pinball.rs   # Pinball
+    ├── mod.rs           # Game trait & registry
+    ├── asteroids.rs     # Asteroids
+    ├── beam.rs          # Beam simulation
+    ├── booster.rs       # Fermilab Booster synchrotron
+    ├── breakout.rs      # Breakout
+    ├── dino_run.rs      # Dino Run
+    ├── frogger.rs       # Frogger
+    ├── jezzball.rs      # JezzBall
+    └── space_invaders.rs # Space Invaders
 ```
 
 ## 🛠️ Dependencies

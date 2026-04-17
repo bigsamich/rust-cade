@@ -75,6 +75,8 @@ pub struct App {
     pub beam: BeamGame,
     pub high_scores: HighScores,
     pub show_high_scores: bool,
+    pub show_help: bool,
+    pub help_scroll: u16,
     // Name entry state
     pub entering_name: bool,
     pub name_buffer: String,
@@ -98,6 +100,8 @@ impl App {
             beam: BeamGame::new(),
             high_scores: HighScores::load(),
             show_high_scores: false,
+            show_help: false,
+            help_scroll: 0,
             entering_name: false,
             name_buffer: String::new(),
             name_game_idx: 0,
@@ -168,6 +172,30 @@ impl App {
         // If entering a name, intercept all input
         if self.entering_name {
             self.handle_name_input(key);
+            return;
+        }
+
+        // Help overlay toggle
+        if self.show_help {
+            match key.code {
+                KeyCode::Char('?') | KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
+                    self.show_help = false;
+                    self.help_scroll = 0;
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.help_scroll = self.help_scroll.saturating_sub(1);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        if key.code == KeyCode::Char('?') {
+            self.show_help = true;
+            self.help_scroll = 0;
             return;
         }
 
@@ -290,8 +318,7 @@ impl App {
                 self.name_buffer.pop();
             }
             KeyCode::Esc => {
-                // Cancel — submit with default name
-                self.high_scores.submit(self.name_game_idx, "???", self.name_score);
+                // Cancel — discard the score entirely
                 self.entering_name = false;
                 self.name_buffer.clear();
             }
